@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -25,9 +26,8 @@ import { toast } from "sonner";
 import { useApp } from "@/components/AppState";
 import { ClientMap } from "@/components/ClientMap";
 import { LawDashboard } from "@/components/LawDashboard";
-import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { hotspots, resources, trend7d } from "@/lib/dummy-data";
+import { resources, trend7d } from "@/lib/dummy-data";
 import type { dashboardView } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 
@@ -182,98 +182,39 @@ function MapPreview({ showKonsesi = false }: { showKonsesi?: boolean }) {
   );
 }
 
-function AlertList() {
-  const { can, statusOf, setStatus, escalate, escalated } = useApp();
-  const list = hotspots
-    .filter((h) => statusOf(h.id) !== "bukan-api")
-    .slice(0, 6);
-  return (
-    <div className={card}>
-      <SectionHead
-        title="Kejadian terbaru"
-        sub="Klik nama untuk membuka detail dan memperbarui status"
-        action={
-          <Button asChild variant="link" className="h-auto p-0 text-sm">
-            <Link href="/laporan">
-              Lihat semua <ArrowRight />
-            </Link>
-          </Button>
-        }
-      />
-      <ul className="divide-y">
-        {list.map((hotspot) => {
-          const status = statusOf(hotspot.id);
-          return (
-            <li
-              key={hotspot.id}
-              className="flex flex-wrap items-center gap-4 px-6 py-4"
-            >
-              <span className="w-12 text-sm tabular-nums text-muted-foreground">
-                {hotspot.waktu}
-              </span>
-              <Link
-                href={`/peta?id=${encodeURIComponent(hotspot.id)}`}
-                className="min-w-0 flex-1 hover:underline"
-              >
-                <div className="truncate font-medium">{hotspot.desa}</div>
-                <div className="text-sm text-muted-foreground">
-                  {hotspot.kabupaten} · {hotspot.gambut ? "Gambut" : "Mineral"}
-                </div>
-              </Link>
-              {can("verifikasi") && status === "baru" ? (
-                <div className="flex gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStatus(hotspot.id, "diverifikasi");
-                      toast.success(`${hotspot.desa}: ditandai api nyata`);
-                    }}
-                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
-                  >
-                    Api nyata
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStatus(hotspot.id, "bukan-api");
-                      toast(`${hotspot.desa}: ditandai bukan api`);
-                    }}
-                    className="rounded-lg border px-3 py-1.5 text-xs font-medium"
-                  >
-                    Bukan
-                  </button>
-                </div>
-              ) : can("eskalasi") && status === "diverifikasi" ? (
-                escalated.includes(hotspot.id) ? (
-                  <span className="text-xs font-medium text-forest">
-                    ✓ Dieskalasi ke BPBD
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      escalate(hotspot.id);
-                      toast.success(`Eskalasi ${hotspot.desa} dikirim ke BPBD`);
-                    }}
-                    className="flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium"
-                  >
-                    <ArrowUpRight className="h-3.5 w-3.5" /> Eskalasi
-                  </button>
-                )
-              ) : (
-                <StatusBadge status={status} />
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
 export function PetugasView() {
-  const active = hotspots.filter((h) => h.status !== "bukan-api").length;
-  const verified = hotspots.filter((h) => h.status === "diverifikasi").length;
+  const [incidents, setIncidents] = useState<OpsIncident[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const loadIncidents = useCallback(async () => {
+    try {
+      const response = await fetch("/api/ops/incidents");
+      const result = (await response.json()) as {
+        data?: OpsIncident[];
+        error?: string;
+      };
+      if (!response.ok)
+        throw new Error(result.error ?? "Gagal memuat insiden.");
+      setIncidents(result.data ?? []);
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Gagal memuat insiden.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    void loadIncidents();
+  }, [loadIncidents]);
+  const active = incidents.filter(
+    (incident) => incident.status !== "extinguished",
+  ).length;
+  const verified = incidents.filter(
+    (incident) => incident.status === "confirmed",
+  ).length;
   return (
     <>
       <header>
@@ -302,7 +243,10 @@ export function PetugasView() {
         <Stat
           icon={ArrowUpRight}
           label="Dapat dieskalasi"
-          value={String(Math.max(0, verified - 1))}
+          value={String(
+            incidents.filter((incident) => incident.status === "in_progress")
+              .length,
+          )}
           hint="Ke BPBD"
           tone="bg-risk-medium/20 text-foreground"
         />
@@ -316,8 +260,127 @@ export function PetugasView() {
           <TrendCard />
         </div>
       </section>
-      <AlertList />
+      <OpsIncidentList
+        incidents={incidents}
+        loading={loading}
+        error={error}
+        onUpdated={loadIncidents}
+      />
     </>
+  );
+}
+
+type OpsIncident = {
+  id: string;
+  region_id: string | null;
+  source: "satellite" | "report" | "both";
+  status: "confirmed" | "in_progress" | "extinguished";
+  needs_review: boolean;
+  priority_score: number;
+  hotspot_count: number;
+  first_detected_at: string;
+  last_detected_at: string;
+  closed_at: string | null;
+  regions: { name: string } | null;
+};
+
+function OpsIncidentList({
+  incidents,
+  loading,
+  error,
+  onUpdated,
+}: {
+  incidents: OpsIncident[];
+  loading: boolean;
+  error: string | null;
+  onUpdated: () => Promise<void>;
+}) {
+  async function transition(incident: OpsIncident) {
+    const nextStatus =
+      incident.status === "confirmed"
+        ? "in_progress"
+        : incident.status === "in_progress"
+          ? "extinguished"
+          : "closed";
+    const response = await fetch("/api/ops/incidents", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        incidentId: incident.id,
+        status: nextStatus,
+        note:
+          nextStatus === "in_progress"
+            ? "Penanganan dimulai oleh petugas."
+            : "Penanganan selesai.",
+      }),
+    });
+    const result = (await response.json()) as { error?: string };
+    if (!response.ok) {
+      toast.error("Status gagal diperbarui", { description: result.error });
+      return;
+    }
+    toast.success(
+      nextStatus === "in_progress"
+        ? "Insiden ditandai ditangani."
+        : "Insiden ditandai selesai.",
+    );
+    await onUpdated();
+  }
+
+  return (
+    <div className={card}>
+      <SectionHead
+        title="Operasi insiden"
+        sub="Status tersimpan ke database dan tercatat di riwayat status."
+      />
+      {loading && (
+        <p className="px-6 pb-6 text-sm text-muted-foreground">
+          Memuat insiden...
+        </p>
+      )}
+      {error && <p className="px-6 pb-6 text-sm text-destructive">{error}</p>}
+      {!loading && !error && incidents.length === 0 && (
+        <p className="px-6 pb-6 text-sm text-muted-foreground">
+          Tidak ada insiden aktif di wilayah kerja.
+        </p>
+      )}
+      <ul className="divide-y">
+        {incidents.map((incident) => (
+          <li
+            key={incident.id}
+            className="flex flex-wrap items-center gap-4 px-6 py-4"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="font-medium">
+                {incident.regions?.name ?? "Wilayah belum tersedia"}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {incident.id} · {incident.hotspot_count} hotspot · prioritas{" "}
+                {incident.priority_score}
+              </div>
+            </div>
+            <span className="rounded-full bg-muted px-2.5 py-1 text-xs">
+              {incident.status === "confirmed"
+                ? "Diterima"
+                : incident.status === "in_progress"
+                  ? "Ditangani"
+                  : "Selesai"}
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => void transition(incident)}
+            >
+              {incident.status === "confirmed"
+                ? "Mulai tangani"
+                : incident.status === "in_progress"
+                  ? "Tandai selesai"
+                  : "Tutup insiden"}
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

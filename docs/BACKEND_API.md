@@ -29,6 +29,8 @@ token Twilio, `AI_INTERNAL_KEY`, atau `BARAWATCH_AI_API_KEY` dari browser.
 | GET | `/api/admin/contacts` | Admin | Daftar warga dan MPA dari nomor WhatsApp |
 | POST | `/api/admin/contacts` | Admin | Mendaftarkan/menetapkan nomor warga atau MPA |
 | PATCH | `/api/admin/contacts` | Admin | Mengubah nama dan assignment kontak |
+| GET | `/api/ops/incidents` | Petugas/Admin | Daftar insiden aktif dalam wilayah kerja |
+| PATCH | `/api/ops/incidents` | Petugas/Admin | Memperbarui status operasional dan membuat log |
 | POST | `/api/webhooks/whatsapp` | `X-Twilio-Signature` | Webhook inbound Twilio |
 | GET | `/api/debug/twilio` | `TWILIO_DEBUG=true` | Tes kredensial Twilio |
 | GET | `/api/cron/ingest-hotspots` | Belum diterapkan | Scaffold |
@@ -417,3 +419,32 @@ APP_ENV=development
 AI_INTERNAL_KEY=
 BARAWATCH_AI_API_KEY=
 ```
+## Operasi Petugas
+
+### `GET /api/ops/incidents`
+
+Mengambil insiden aktif (`confirmed`, `in_progress`, atau `extinguished`) yang
+berada dalam wilayah kerja pengguna. Endpoint ini memerlukan session Supabase
+dengan role `petugas` atau `admin`.
+
+### `PATCH /api/ops/incidents`
+
+Memperbarui status operasional insiden secara atomik dan membuat catatan pada
+`incident_status_logs`.
+
+```json
+{
+  "incidentId": "uuid-insiden",
+  "status": "in_progress",
+  "note": "Tim mulai menuju lokasi."
+}
+```
+
+Transisi yang diizinkan:
+
+- `confirmed` -> `in_progress` (Diterima -> Ditangani)
+- `in_progress` -> `extinguished` (Ditangani -> Selesai)
+- `extinguished` -> `closed` (menutup arsip insiden)
+
+Status laporan warga tidak diubah oleh endpoint ini; status tersebut tetap
+berada pada alur verifikasi laporan.
