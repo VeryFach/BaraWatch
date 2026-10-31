@@ -24,7 +24,6 @@ import {
 import { useApp } from "@/components/AppState";
 import { ClientMap } from "@/components/ClientMap";
 import { ReportDialog } from "@/components/ReportDialog";
-import { RoleDashboard } from "@/components/RoleDashboard";
 import { SearchSelect } from "@/components/SearchSelect";
 import { RiskDot, StatusBadge } from "@/components/StatusBadge";
 import {
@@ -35,7 +34,7 @@ import {
   trend7d,
   weather,
 } from "@/lib/dummy-data";
-import { dashboardView } from "@/lib/roles";
+import { dashboardView, roles } from "@/lib/roles";
 
 import { cn } from "@/lib/utils";
 
@@ -329,11 +328,30 @@ export default function DashboardPage() {
   const { role } = useApp();
   const view = dashboardView(role);
 
-  if (view !== "publik") {
-    return <RoleDashboard view={view} />;
-  }
-
-  return <PublicDashboard />;
+  return (
+    <>
+      {view !== "publik" && (
+        <div className="border-b bg-primary/10 px-4 py-2.5 text-center text-sm">
+          <span className="text-muted-foreground">
+            Anda masuk sebagai {roles[role]?.label}.{" "}
+          </span>
+          <Link
+            href={
+              view === "admin"
+                ? "/admin"
+                : view === "petugas"
+                  ? "/petugas"
+                  : "/penegak-hukum"
+            }
+            className="font-medium text-primary underline underline-offset-4 hover:opacity-80"
+          >
+            Buka Dashboard {roles[role]?.short} &rarr;
+          </Link>
+        </div>
+      )}
+      <PublicDashboard />
+    </>
+  );
 }
 
 function PublicDashboard() {

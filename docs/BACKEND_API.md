@@ -23,6 +23,12 @@ token Twilio, `AI_INTERNAL_KEY`, atau `BARAWATCH_AI_API_KEY` dari browser.
 | GET | `/api/public/risk` | Publik | Scaffold, mengembalikan data kosong |
 | GET | `/api/public/regions` | Publik | Data wilayah dari Supabase |
 | GET | `/api/public/reports` | Publik | Data laporan tersanitasi dari Supabase |
+| POST | `/api/auth/login` | Publik | Membuat sesi Supabase dengan email/password |
+| POST | `/api/auth/logout` | Sesi aktif | Mengakhiri sesi Supabase |
+| GET | `/api/auth/session` | Publik | Mengambil user dan profil sesi aktif |
+| GET | `/api/admin/contacts` | Admin | Daftar warga dan MPA dari nomor WhatsApp |
+| POST | `/api/admin/contacts` | Admin | Mendaftarkan/menetapkan nomor warga atau MPA |
+| PATCH | `/api/admin/contacts` | Admin | Mengubah nama dan assignment kontak |
 | POST | `/api/webhooks/whatsapp` | `X-Twilio-Signature` | Webhook inbound Twilio |
 | GET | `/api/debug/twilio` | `TWILIO_DEBUG=true` | Tes kredensial Twilio |
 | GET | `/api/cron/ingest-hotspots` | Belum diterapkan | Scaffold |
@@ -164,6 +170,27 @@ laporan. URL media berlaku terbatas dan dibuat server-side.
   ]
 }
 ```
+
+### Auth
+
+`POST /api/auth/login` menerima:
+
+```json
+{ "email": "petugas@example.com", "password": "password" }
+```
+
+Sesi dikirim melalui cookie HTTP-only yang dikelola Supabase SSR. Frontend
+tidak menyimpan token atau role di `sessionStorage`.
+
+`POST /api/auth/logout` menghapus sesi aktif. Route `/admin/*` dilindungi
+middleware dan mengarahkan pengguna yang belum login ke `/login`.
+
+### Admin contacts
+
+Kontak WhatsApp tidak memiliki akun login. Admin dapat mendaftarkan nomor
+format E.164, nama tampilan, dan wilayah tugas MPA melalui
+`/api/admin/contacts`. Role `mpa` wajib memiliki `regionId`; kontak `warga`
+tidak dapat menerima assignment MPA.
 
 ### `POST /api/webhooks/whatsapp`
 
