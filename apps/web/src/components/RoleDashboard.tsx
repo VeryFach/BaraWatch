@@ -26,7 +26,7 @@ import { toast } from "sonner";
 import { ClientMap } from "@/components/ClientMap";
 import { LawDashboard } from "@/components/LawDashboard";
 import { Button } from "@/components/ui/button";
-import { resources, trend7d } from "@/lib/dummy-data";
+import type { PublicHotspot, PublicIncident } from "@/lib/public-api";
 import type { dashboardView } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 
@@ -102,13 +102,13 @@ function Stat({
 type TrendPoint = { hari: string; mentah: number; tersaring: number };
 
 function TrendCard({
-  data = trend7d,
-  loading = false,
-  error = null,
+  data,
+  loading,
+  error,
 }: {
-  data?: TrendPoint[];
-  loading?: boolean;
-  error?: string | null;
+  data: TrendPoint[];
+  loading: boolean;
+  error: string | null;
 }) {
   return (
     <div className={cn(card, "p-6")}>
@@ -165,12 +165,28 @@ function TrendCard({
   );
 }
 
-function MapPreview({ showKonsesi = false }: { showKonsesi?: boolean }) {
+function MapPreview({
+  showKonsesi = false,
+  hotspots,
+  incidents = [],
+  error,
+}: {
+  showKonsesi?: boolean;
+  hotspots?: PublicHotspot[];
+  incidents?: PublicIncident[];
+  error?: string | null;
+}) {
+  const liveData = hotspots !== undefined;
   return (
     <div className={cn(card, "overflow-hidden")}>
       <SectionHead
         title="Peta sekilas"
-        sub="Titik api dan zona risiko desa"
+        sub={
+          error ??
+          (liveData
+            ? "Hotspot dan insiden dari database"
+            : "Titik api dan zona risiko desa")
+        }
         action={
           <Link
             href="/peta"
@@ -182,11 +198,13 @@ function MapPreview({ showKonsesi = false }: { showKonsesi?: boolean }) {
       />
       <div className="h-80">
         <ClientMap
-          showRisk
+          showRisk={!liveData}
           showHotspots
           hideFalse
           compact
           showKonsesi={showKonsesi}
+          publicHotspots={hotspots}
+          publicIncidents={incidents}
         />
       </div>
     </div>
@@ -195,9 +213,18 @@ function MapPreview({ showKonsesi = false }: { showKonsesi?: boolean }) {
 
 export function PetugasView() {
   const [incidents, setIncidents] = useState<OpsIncident[]>([]);
+  const [mapHotspots, setMapHotspots] = useState<PublicHotspot[]>([]);
+  const [mapIncidents, setMapIncidents] = useState<PublicIncident[]>([]);
+  const [teams, setTeams] = useState<OpsTeam[]>([]);
+  const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [supportLoading, setSupportLoading] = useState(true);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [teamsError, setTeamsError] = useState<string | null>(null);
+  const [trendError, setTrendError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const loadIncidents = useCallback(async () => {
+    setError(null);
     try {
       const response = await fetch("/api/ops/incidents");
       const result = (await response.json()) as {
@@ -220,6 +247,48 @@ export function PetugasView() {
   useEffect(() => {
     void loadIncidents();
   }, [loadIncidents]);
+  useEffect(() => {
+    let active = true;
+    const fetchData = async <T,>(url: string): Promise<T> => {
+      const response = await fetch(url, { cache: "no-store" });
+      const body = (await response.json()) as { data?: T; error?: string };
+      if (!response.ok || body.data === undefined) {
+        throw new Error(body.error ?? "Data dashboard tidak tersedia.");
+      }
+      return body.data;
+    };
+    const loadSupportData = async () => {
+      const results = await Promise.allSettled([
+        fetchData<PublicHotspot[]>("/api/public/hotspots?limit=200"),
+        fetchData<PublicIncident[]>("/api/public/incidents?limit=200"),
+        fetchData<TrendPoint[]>("/api/public/hotspot-trend"),
+        fetchData<OpsTeam[]>("/api/ops/teams"),
+      ]);
+      if (!active) return;
+      const [hotspotResult, incidentResult, trendResult, teamResult] = results;
+      if (hotspotResult.status === "fulfilled") {
+        setMapHotspots(hotspotResult.value);
+      } else {
+        setMapError("Data hotspot sedang tidak tersedia.");
+      }
+      if (incidentResult.status === "fulfilled") {
+        setMapIncidents(incidentResult.value);
+      } else {
+        setMapError(
+          (current) => current ?? "Data insiden peta sedang tidak tersedia.",
+        );
+      }
+      if (trendResult.status === "fulfilled") setTrend(trendResult.value);
+      else setTrendError("Data tren hotspot sedang tidak tersedia.");
+      if (teamResult.status === "fulfilled") setTeams(teamResult.value);
+      else setTeamsError("Data tim lapangan sedang tidak tersedia.");
+      setSupportLoading(false);
+    };
+    void loadSupportData();
+    return () => {
+      active = false;
+    };
+  }, []);
   const active = incidents.filter(
     (incident) => incident.status !== "extinguished",
   ).length;
@@ -239,36 +308,47 @@ export function PetugasView() {
       <section className="grid gap-4 sm:grid-cols-3">
         <Stat
           icon={Flame}
-          label="Titik aktif"
-          value={String(active)}
-          hint="Perlu dipantau"
+          label="Insiden aktif"
+          value={loading ? "…" : error ? "—" : String(active)}
+          hint={error ?? "Dari maks. 100 insiden operasional terbaru"}
           tone="bg-destructive/10 text-destructive"
         />
         <Stat
           icon={Check}
           label="Terverifikasi"
-          value={String(verified)}
-          hint="Api nyata"
+          value={loading ? "…" : error ? "—" : String(verified)}
+          hint={error ?? "Insiden dengan status terkonfirmasi"}
           tone="bg-forest/10 text-forest"
         />
         <Stat
           icon={ArrowUpRight}
-          label="Dapat dieskalasi"
-          value={String(
-            incidents.filter((incident) => incident.status === "in_progress")
-              .length,
-          )}
-          hint="Ke BPBD"
+          label="Sedang ditangani"
+          value={
+            loading
+              ? "…"
+              : error
+                ? "—"
+                : String(
+                    incidents.filter(
+                      (incident) => incident.status === "in_progress",
+                    ).length,
+                  )
+          }
+          hint={error ?? "Dari maks. 100 insiden terbaru"}
           tone="bg-risk-medium/20 text-foreground"
         />
       </section>
       <section className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
-          <MapPreview />
+          <MapPreview
+            hotspots={mapHotspots}
+            incidents={mapIncidents}
+            error={mapError}
+          />
         </div>
         <div className="space-y-6 lg:col-span-2">
-          <TeamCard />
-          <TrendCard />
+          <TeamCard teams={teams} loading={supportLoading} error={teamsError} />
+          <TrendCard data={trend} loading={supportLoading} error={trendError} />
         </div>
       </section>
       <OpsIncidentList
@@ -292,6 +372,14 @@ type OpsIncident = {
   first_detected_at: string;
   last_detected_at: string;
   closed_at: string | null;
+  regions: { name: string } | null;
+};
+
+type OpsTeam = {
+  id: string;
+  name: string;
+  agency: string | null;
+  is_active: boolean;
   regions: { name: string } | null;
 };
 
@@ -395,30 +483,52 @@ function OpsIncidentList({
   );
 }
 
-function TeamCard() {
+function TeamCard({
+  teams,
+  loading,
+  error,
+}: {
+  teams: OpsTeam[];
+  loading: boolean;
+  error: string | null;
+}) {
   return (
     <div className={cn(card, "p-6")}>
       <h2 className="font-semibold">Tim di lapangan</h2>
       <ul className="mt-4 space-y-3">
-        {resources.map((resource) => (
+        {teams.map((team) => (
           <li
-            key={resource.nama}
+            key={team.id}
             className="flex items-center justify-between gap-3 text-sm"
           >
             <div>
-              <div className="font-medium">{resource.nama}</div>
+              <div className="font-medium">{team.name}</div>
               <div className="text-muted-foreground">
-                {resource.lokasi} ·{" "}
-                {resource.anggota === null
-                  ? "Jumlah belum tersedia"
-                  : `${resource.anggota} orang`}
+                {team.agency ?? "Instansi belum dicatat"} ·{" "}
+                {team.regions?.name ?? "Wilayah belum tersedia"}
               </div>
             </div>
-            <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs">
-              {resource.status}
+            <span
+              className={cn(
+                "rounded-full px-2.5 py-0.5 text-xs",
+                team.is_active
+                  ? "bg-forest/10 text-forest"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
+              {team.is_active ? "Aktif" : "Nonaktif"}
             </span>
           </li>
         ))}
+        {loading && (
+          <li className="text-sm text-muted-foreground">Memuat data tim…</li>
+        )}
+        {error && <li className="text-sm text-destructive">{error}</li>}
+        {!loading && !error && teams.length === 0 && (
+          <li className="text-sm text-muted-foreground">
+            Belum ada tim lapangan yang terdaftar.
+          </li>
+        )}
       </ul>
     </div>
   );
