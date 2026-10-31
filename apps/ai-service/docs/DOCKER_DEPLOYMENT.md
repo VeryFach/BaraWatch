@@ -1,5 +1,7 @@
 # Docker deployment
 
+> **Historical deployment notes.** The current Compose file mounts host `models/weights` read-only and does not mount the `model-cache` volume mentioned below. For the source-verified current configuration, see [Deployment](DEPLOYMENT.md). This page is retained for its earlier operational notes.
+
 ## Requirements
 
 Docker Engine with Compose v2 is required. The default image is Linux,

@@ -12,13 +12,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HF_HOME=/opt/huggingface \
     BARAWATCH_DEVICE=cpu
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md requirements-copernicus.txt ./
 COPY app ./app
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir \
         --index-url https://download.pytorch.org/whl/cpu \
         torch torchvision \
-    && pip install --no-cache-dir .
+    && pip install --no-cache-dir . \
+    && pip install --no-cache-dir -r requirements-copernicus.txt
 RUN useradd --create-home serviceuser
 RUN mkdir -p /opt/huggingface /service/models/weights \
     && chown -R serviceuser:serviceuser /opt/huggingface /service
