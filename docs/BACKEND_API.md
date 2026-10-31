@@ -438,6 +438,27 @@ BARAWATCH_AI_API_KEY=
 ```
 ## Operasi Petugas
 
+## Siklus laporan dan insiden
+
+Laporan warga yang sudah memiliki koordinat sekarang selalu dikaitkan ke
+entitas `incidents` melalui RPC `link_report_to_incident`:
+
+1. Sistem mencari insiden aktif dalam radius 2 km. Jika ada, `reports.incident_id`
+   menunjuk ke insiden tersebut.
+2. Jika tidak ada, sistem membuat insiden baru dengan `source = report` dan
+   `status = new`.
+3. Jika insiden satelit kemudian ditemukan pada lokasi yang sama oleh pipeline
+   FIRMS, insiden laporan dan hotspot digabung dan `source` berubah menjadi
+   `both`.
+4. Banyak laporan warga pada kejadian yang sama tetap memakai satu `incident_id`;
+   laporan tidak membuat insiden duplikat selama masih berada dalam radius
+   pengelompokan.
+
+Status `reports` (diterima, ditinjau, terverifikasi, ditolak) tetap terpisah dari
+status operasional `incidents` (baru, dikonfirmasi, ditangani, selesai). Dengan
+begitu, laporan yang masih menunggu verifikasi tetap dapat dilacak tanpa
+menghilangkan konteks insiden lapangan.
+
 ### `GET /api/ops/incidents`
 
 Mengambil insiden aktif (`confirmed`, `in_progress`, atau `extinguished`) yang

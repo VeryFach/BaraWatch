@@ -1,6 +1,6 @@
 -- P0 FIRMS job lease and atomic incident reconciliation.
 -- No transaction is held while the application calls NASA or the AI service.
-create table public.pipeline_leases (
+create table if not exists public.pipeline_leases (
   job_name text primary key check (job_name = 'firms'),
   owner_token uuid not null,
   run_id uuid not null references public.pipeline_runs(id) on delete cascade,
@@ -130,13 +130,38 @@ begin
        where h.incident_id is not null order by h.acq_at desc limit 1 for update of h;
     end if;
     if incident is null then
+      select i.id into incident
+        from public.incidents i
+       where i.source = 'report'
+         and i.status in ('new','confirmed','escalated','in_progress','contained')
+         and i.centroid is not null
+         and extensions.st_dwithin(
+           i.centroid::extensions.geography,
+           extensions.st_setsrid(extensions.st_makepoint(
+             (c->'centroid'->>'longitude')::float8,
+             (c->'centroid'->>'latitude')::float8
+           ),4326)::extensions.geography,
+           2000
+         )
+       order by extensions.st_distance(
+         i.centroid::extensions.geography,
+         extensions.st_setsrid(extensions.st_makepoint(
+           (c->'centroid'->>'longitude')::float8,
+           (c->'centroid'->>'latitude')::float8
+         ),4326)::extensions.geography
+       )
+       limit 1
+       for update;
+    end if;
+    if incident is null then
       insert into public.incidents(source,status,centroid,footprint,first_detected_at,last_detected_at,hotspot_count)
       values('satellite','new',extensions.st_setsrid(extensions.st_makepoint((c->'centroid'->>'longitude')::float8,(c->'centroid'->>'latitude')::float8),4326),
         case when c->'footprint' is null or c->'footprint'='null'::jsonb then null else extensions.st_setsrid(extensions.st_geomfromgeojson((c->'footprint')::text),4326) end,
         (c->>'first_detected_at')::timestamptz,(c->>'last_detected_at')::timestamptz,(c->>'hotspot_count')::int)
       returning id into incident;
     else
-      update public.incidents i set centroid=extensions.st_setsrid(extensions.st_makepoint((c->'centroid'->>'longitude')::float8,(c->'centroid'->>'latitude')::float8),4326),
+      update public.incidents i set source=case when i.source='report' then 'both' else i.source end,
+        centroid=extensions.st_setsrid(extensions.st_makepoint((c->'centroid'->>'longitude')::float8,(c->'centroid'->>'latitude')::float8),4326),
         footprint=case when c->'footprint' is null or c->'footprint'='null'::jsonb then i.footprint else extensions.st_setsrid(extensions.st_geomfromgeojson((c->'footprint')::text),4326) end,
         first_detected_at=least(i.first_detected_at,(c->>'first_detected_at')::timestamptz), last_detected_at=greatest(i.last_detected_at,(c->>'last_detected_at')::timestamptz),
         hotspot_count=(select count(*) from public.hotspots where incident_id=i.id or id in (select value::uuid from jsonb_array_elements_text(c->'hotspot_ids'))), updated_at=now()

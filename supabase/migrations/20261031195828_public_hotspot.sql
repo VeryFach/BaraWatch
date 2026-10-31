@@ -29,8 +29,8 @@ set search_path = pg_catalog, public, extensions
 as $$
   select
     h.id,
-    h.latitude,
-    h.longitude,
+    extensions.st_y(h.geom) as latitude,
+    extensions.st_x(h.geom) as longitude,
     h.acq_at,
     h.satellite,
     h.instrument,

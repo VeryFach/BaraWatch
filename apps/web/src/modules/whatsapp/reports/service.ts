@@ -95,11 +95,7 @@ export async function downloadAndAnalyze(
     }
     const annotatedBody = await annotatedResponse.arrayBuffer();
     annotatedPath = `reports/${reportId}/annotated-${crypto.randomUUID()}.jpg`;
-    await uploadToSupabaseStorage(
-      annotatedPath,
-      annotatedBody,
-      "image/jpeg",
-    );
+    await uploadToSupabaseStorage(annotatedPath, annotatedBody, "image/jpeg");
   }
   return { path, annotatedPath, vision };
 }
@@ -142,7 +138,26 @@ export async function createReport(contactId: string, input: Inbound) {
     }),
   });
   if (!rows[0]) throw new Error("Report creation returned no row");
-  return { ...rows[0], regionId: region?.region_id ?? null };
+  const linkedIncident = await supabaseRequest<string | string[]>(
+    "rpc/link_report_to_incident",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        p_report_id: rows[0].id,
+        p_latitude: input.latitude,
+        p_longitude: input.longitude,
+      }),
+    },
+  );
+  const incidentId =
+    typeof linkedIncident === "string"
+      ? linkedIncident
+      : (linkedIncident?.[0] ?? null);
+  return {
+    ...rows[0],
+    incidentId,
+    regionId: region?.region_id ?? null,
+  };
 }
 
 export async function finishReport(
@@ -209,10 +224,14 @@ export async function finishReport(
           new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
         )}&acq_at=lte.${encodeURIComponent(observedAt)}&limit=5000`,
       );
-      const scores = (analysis.vision?.response.vision as {
-        scores?: Record<string, unknown>;
-        needs_review?: boolean;
-      } | undefined)?.scores;
+      const scores = (
+        analysis.vision?.response.vision as
+          | {
+              scores?: Record<string, unknown>;
+              needs_review?: boolean;
+            }
+          | undefined
+      )?.scores;
       const matchingResponse = await fetch(
         `${env.aiServiceUrl}/v1/matching/score`,
         {
@@ -254,7 +273,9 @@ export async function finishReport(
         },
       );
       if (!matchingResponse.ok)
-        throw new Error(`Matching analysis failed (${matchingResponse.status})`);
+        throw new Error(
+          `Matching analysis failed (${matchingResponse.status})`,
+        );
       const matching = (await matchingResponse.json()) as MatchingResult;
       await supabaseRequest(`reports?id=eq.${encodeURIComponent(report.id)}`, {
         method: "PATCH",
