@@ -1,3 +1,4 @@
+import json
 from io import BytesIO
 
 from PIL import Image
@@ -202,6 +203,13 @@ def test_annotated_vision_preserves_jpeg_output(client, monkeypatch):
     )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
+    summary = response.headers["x-vision-summary"]
+    assert set(json.loads(summary)) == {
+        "labels",
+        "smoke_type",
+        "scores",
+        "needs_review",
+    }
     with Image.open(BytesIO(response.content)) as output:
         assert output.format == "JPEG"
         assert output.size == (32, 24)

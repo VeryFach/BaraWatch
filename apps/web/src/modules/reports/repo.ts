@@ -4,6 +4,13 @@ import { supabaseRequest, uploadToSupabaseStorage } from "@/lib/supabase/admin";
 
 export class ReportRegionMismatchError extends Error {}
 
+type VisionSummary = {
+  labels: string[];
+  smoke_type: string | null;
+  scores: Record<string, number>;
+  needs_review: boolean;
+};
+
 export interface CreatePublicReportInput {
   phone: string;
   regionId: string;
@@ -40,7 +47,40 @@ async function createAnnotatedPhoto(bytes: ArrayBuffer) {
   ) {
     return null;
   }
-  return { bytes: annotatedBytes, contentType };
+  let vision: VisionSummary | null = null;
+  try {
+    const parsed = JSON.parse(
+      response.headers.get("x-vision-summary") ?? "null",
+    ) as Partial<VisionSummary> | null;
+    if (
+      parsed &&
+      Array.isArray(parsed.labels) &&
+      parsed.labels.every((label) => typeof label === "string") &&
+      parsed.scores &&
+      typeof parsed.scores === "object" &&
+      !Array.isArray(parsed.scores)
+    ) {
+      const scores = Object.fromEntries(
+        Object.entries(parsed.scores).filter(
+          ([, score]) =>
+            typeof score === "number" &&
+            Number.isFinite(score) &&
+            score >= 0 &&
+            score <= 1,
+        ),
+      );
+      vision = {
+        labels: parsed.labels,
+        smoke_type:
+          typeof parsed.smoke_type === "string" ? parsed.smoke_type : null,
+        scores,
+        needs_review: parsed.needs_review === true,
+      };
+    }
+  } catch {
+    // Older AI deployments may return the image without the score header.
+  }
+  return { bytes: annotatedBytes, contentType, vision };
 }
 
 export async function createPublicReport(input: CreatePublicReportInput) {
@@ -164,7 +204,17 @@ export async function createPublicReport(input: CreatePublicReportInput) {
               report_id: report.id,
               storage_path: annotatedPath,
               media_type: "image",
-              detections: { annotated: true, public_consent: true },
+              fire_score: annotated.vision?.scores.fire ?? null,
+              smoke_score:
+                annotated.vision?.scores.wildfire_smoke ??
+                annotated.vision?.scores.industrial_smoke ??
+                annotated.vision?.scores.smoke_general ??
+                null,
+              detections: {
+                annotated: true,
+                public_consent: true,
+                vision: annotated.vision,
+              },
             }),
           });
         }

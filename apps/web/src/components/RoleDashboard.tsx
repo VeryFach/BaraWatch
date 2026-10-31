@@ -23,7 +23,6 @@ import {
   YAxis,
 } from "recharts";
 import { toast } from "sonner";
-import { useApp } from "@/components/AppState";
 import { ClientMap } from "@/components/ClientMap";
 import { LawDashboard } from "@/components/LawDashboard";
 import { Button } from "@/components/ui/button";
@@ -100,7 +99,17 @@ function Stat({
   );
 }
 
-function TrendCard() {
+type TrendPoint = { hari: string; mentah: number; tersaring: number };
+
+function TrendCard({
+  data = trend7d,
+  loading = false,
+  error = null,
+}: {
+  data?: TrendPoint[];
+  loading?: boolean;
+  error?: string | null;
+}) {
   return (
     <div className={cn(card, "p-6")}>
       <h2 className="font-semibold">Tren 7 hari</h2>
@@ -109,7 +118,7 @@ function TrendCard() {
       </p>
       <div className="mt-6 h-56">
         <ResponsiveContainer>
-          <AreaChart data={trend7d} margin={{ left: -20, right: 4 }}>
+          <AreaChart data={data} margin={{ left: -20, right: 4 }}>
             <CartesianGrid vertical={false} stroke="var(--border)" />
             <XAxis
               dataKey="hari"
@@ -150,6 +159,8 @@ function TrendCard() {
           </AreaChart>
         </ResponsiveContainer>
       </div>
+      {loading && <p className="text-xs text-muted-foreground">Memuat tren…</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }
@@ -414,8 +425,61 @@ function TeamCard() {
 }
 
 export function AdminView() {
-  const { laporan, setLaporanStatus } = useApp();
-  const pending = laporan.filter((report) => report.status === "menunggu");
+  const [dashboard, setDashboard] = useState<{
+    reports: {
+      id: string;
+      description: string | null;
+      status: "received" | "in_review" | "verified" | "handled" | "rejected";
+      verification_score: number | null;
+      vision_score: number | null;
+      vision_label: string | null;
+      created_at: string;
+      village: string | null;
+      district: string | null;
+    }[];
+    trend: TrendPoint[];
+    stats: {
+      pending: number;
+      pendingDemo: boolean;
+      labels: number;
+      labelsThisWeek: number;
+      labelsDemo: boolean;
+      filterPrecision: number;
+      precisionDemo: boolean;
+    };
+    sources: {
+      name: string;
+      status: "running" | "success" | "partial" | "failed" | "unknown";
+      started_at: string | null;
+      error: string | null;
+      demo: boolean;
+    }[];
+  } | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/admin/dashboard")
+      .then(async (response) => {
+        const result = (await response.json()) as {
+          data?: NonNullable<typeof dashboard>;
+          error?: string;
+        };
+        if (!response.ok || !result.data)
+          throw new Error(result.error ?? "Dashboard admin gagal dimuat.");
+        setDashboard(result.data);
+      })
+      .catch((error: unknown) => {
+        setDashboardError(
+          error instanceof Error
+            ? error.message
+            : "Dashboard admin gagal dimuat.",
+        );
+      })
+      .finally(() => setDashboardLoading(false));
+  }, []);
+  const pending = (dashboard?.reports ?? []).filter(
+    (report) => report.status === "received" || report.status === "in_review",
+  );
   return (
     <>
       <header className="flex flex-wrap items-center justify-between gap-4">
@@ -438,29 +502,77 @@ export function AdminView() {
         <Stat
           icon={ScrollText}
           label="Laporan ragu"
-          value={String(pending.length)}
-          hint="Menunggu ditinjau"
+          value={
+            dashboardLoading
+              ? "…"
+              : dashboardError
+                ? "—"
+                : String(dashboard?.stats.pending ?? 0)
+          }
+          hint={
+            dashboardError
+              ? "Data belum dapat dimuat"
+              : dashboard?.stats.pendingDemo
+                ? "DEMO · contoh karena antrean kosong"
+                : "Menunggu ditinjau · database"
+          }
           tone="bg-risk-medium/20 text-foreground"
         />
         <Stat
           icon={Check}
           label="Label terkumpul"
-          value="1.284"
-          hint="+37 minggu ini"
+          value={
+            dashboardLoading
+              ? "…"
+              : dashboardError
+                ? "—"
+                : String(dashboard?.stats.labels ?? 0)
+          }
+          hint={
+            dashboardError
+              ? "Data belum dapat dimuat"
+              : dashboard?.stats.labelsDemo
+                ? "DEMO · contoh 37 label minggu ini"
+                : `+${dashboard?.stats.labelsThisWeek ?? 0} minggu ini · database`
+          }
           tone="bg-forest/10 text-forest"
         />
         <Stat
           icon={ShieldCheck}
           label="Presisi filter"
-          value="81%"
-          hint="Versi aturan v0.3"
+          value={
+            dashboardLoading
+              ? "…"
+              : dashboardError
+                ? "—"
+                : `${Math.round((dashboard?.stats.filterPrecision ?? 0) * 100)}%`
+          }
+          hint={
+            dashboardError
+              ? "Data belum dapat dimuat"
+              : dashboard?.stats.precisionDemo
+                ? "DEMO · belum ada evaluasi filter"
+                : "Metrik evaluasi filter · database"
+          }
           tone="bg-primary/10 text-accent-foreground"
         />
         <Stat
           icon={Database}
           label="Sumber data"
-          value="4/5"
-          hint="1 perlu perhatian"
+          value={
+            dashboardLoading
+              ? "…"
+              : dashboardError
+                ? "—"
+                : `${dashboard?.sources.filter((source) => source.status === "success").length ?? 0}/5`
+          }
+          hint={
+            dashboardError
+              ? "Status belum dapat dimuat"
+              : dashboard?.sources.some((source) => source.demo)
+                ? "DEMO · status pipeline contoh"
+                : "Job pipeline terakhir · database"
+          }
           tone="bg-destructive/10 text-destructive"
         />
       </section>
@@ -468,7 +580,7 @@ export function AdminView() {
         <div className={cn(card, "lg:col-span-3")}>
           <SectionHead
             title="Antrean laporan ragu"
-            sub="Skor AI deteksi asap hanya terlihat oleh admin"
+            sub="Skor verifikasi AI yang tersimpan pada laporan"
             action={
               <Button asChild variant="link" className="h-auto p-0 text-sm">
                 <Link href="/laporan">
@@ -477,9 +589,19 @@ export function AdminView() {
               </Button>
             }
           />
-          {pending.length === 0 ? (
+          {dashboardLoading ? (
             <p className="px-6 pb-6 text-sm text-muted-foreground">
-              Semua laporan sudah ditinjau.
+              Memuat laporan dan skor AI…
+            </p>
+          ) : dashboardError ? (
+            <p className="px-6 pb-6 text-sm text-destructive">
+              {dashboardError}
+            </p>
+          ) : pending.length === 0 ? (
+            <p className="px-6 pb-6 text-sm text-muted-foreground">
+              {dashboard?.stats.pendingDemo
+                ? "Belum ada laporan pending; angka pada kartu hanya data contoh."
+                : "Tidak ada laporan pending yang perlu ditinjau."}
             </p>
           ) : (
             <ul className="divide-y">
@@ -490,29 +612,64 @@ export function AdminView() {
                 >
                   <div className="min-w-0 flex-1">
                     <div className="font-medium">
-                      {report.jenis} di {report.desa}{" "}
+                      {report.description?.toLowerCase().includes("asap")
+                        ? "Asap"
+                        : "Api"}{" "}
+                      di {report.village ?? "Wilayah belum tersedia"}{" "}
                       <span className="text-xs font-normal text-muted-foreground">
-                        · {report.id} · {report.waktu}
+                        · {report.id} ·{" "}
+                        {new Date(report.created_at).toLocaleString("id-ID", {
+                          timeZone: "Asia/Jakarta",
+                        })}
                       </span>
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      {report.catatan}
+                      {report.description ?? "Deskripsi belum tersedia"}
+                      {report.district ? ` · ${report.district}` : ""}
                     </div>
                   </div>
                   <div className="w-24 text-xs text-muted-foreground">
-                    Skor AI {Math.round(report.skorAI * 100)}%
-                    <div className="mt-1 h-1.5 rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary"
-                        style={{ width: `${report.skorAI * 100}%` }}
-                      />
-                    </div>
+                    {report.vision_score === null &&
+                    report.verification_score === null ? (
+                      <span>Skor AI belum tersedia</span>
+                    ) : (
+                      <>
+                        {report.vision_score !== null
+                          ? `${report.vision_label ?? "Vision"} `
+                          : "Verifikasi "}
+                        {Math.round(
+                          (report.vision_score ??
+                            report.verification_score ??
+                            0) * 100,
+                        )}
+                        %
+                        <div className="mt-1 h-1.5 rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-primary"
+                            style={{
+                              width: `${(report.vision_score ?? report.verification_score ?? 0) * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </>
+                    )}
                   </div>
                   <div className="flex gap-1.5">
                     <button
                       type="button"
                       onClick={() => {
-                        setLaporanStatus(report.id, "diterima");
+                        setDashboard((current) =>
+                          !current
+                            ? current
+                            : {
+                                ...current,
+                                reports: current.reports.map((row) =>
+                                  row.id === report.id
+                                    ? { ...row, status: "verified" }
+                                    : row,
+                                ),
+                              },
+                        );
                         toast.success(`${report.id} diterima`);
                       }}
                       className="rounded-lg bg-primary p-2 text-primary-foreground"
@@ -523,7 +680,18 @@ export function AdminView() {
                     <button
                       type="button"
                       onClick={() => {
-                        setLaporanStatus(report.id, "ditolak");
+                        setDashboard((current) =>
+                          !current
+                            ? current
+                            : {
+                                ...current,
+                                reports: current.reports.map((row) =>
+                                  row.id === report.id
+                                    ? { ...row, status: "rejected" }
+                                    : row,
+                                ),
+                              },
+                        );
                         toast(`${report.id} ditolak`);
                       }}
                       className="rounded-lg border p-2"
@@ -540,32 +708,40 @@ export function AdminView() {
         <div className={cn(card, "p-6 lg:col-span-2")}>
           <h2 className="font-semibold">Status sumber data</h2>
           <ul className="mt-4 space-y-3 text-sm">
-            {[
-              "NASA FIRMS (titik panas)",
-              "RADD (pembukaan lahan)",
-              "Cuaca & curah hujan",
-              "Peta gambut & batas wilayah",
-              "Model risiko mingguan",
-            ].map((source, index) => (
+            {(dashboard?.sources ?? []).map((source) => (
               <li
-                key={source}
+                key={source.name}
                 className="flex items-center justify-between gap-3"
               >
                 <span className="flex items-center gap-2">
                   <span
                     className={cn(
                       "h-2 w-2 rounded-full",
-                      index === 4 ? "bg-destructive" : "bg-forest",
+                      source.status === "success"
+                        ? "bg-forest"
+                        : source.status === "running"
+                          ? "bg-primary"
+                          : source.status === "unknown"
+                            ? "bg-muted-foreground"
+                            : "bg-destructive",
                     )}
                   />
-                  {source}
+                  {source.name}
                 </span>
                 <span
                   className={
-                    index === 4 ? "text-destructive" : "text-muted-foreground"
+                    source.status === "failed"
+                      ? "text-destructive"
+                      : "text-muted-foreground"
                   }
                 >
-                  {index === 4 ? "Gagal 03:00" : "OK"}
+                  {source.demo
+                    ? source.status === "unknown"
+                      ? "DEMO · Belum ada run"
+                      : `DEMO · ${source.status === "failed" ? "Gagal" : "OK"}`
+                    : source.status === "unknown"
+                      ? "Belum ada run"
+                      : `${source.status}${source.started_at ? ` · ${new Date(source.started_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })}` : ""}`}
                 </span>
               </li>
             ))}
@@ -579,7 +755,11 @@ export function AdminView() {
           </button>
         </div>
       </section>
-      <TrendCard />
+      <TrendCard
+        data={dashboard?.trend ?? []}
+        loading={dashboardLoading}
+        error={dashboardError}
+      />
     </>
   );
 }

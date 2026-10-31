@@ -1,9 +1,14 @@
-import { timingSafeEqual, randomUUID } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { getPipelineEnv } from "@/lib/env";
 
 type HotspotRow = {
   region_id: string | null;
-  filter_status: "pending" | "kept" | "low_confidence" | "non_wildfire_zone" | "outside_pilot";
+  filter_status:
+    | "pending"
+    | "kept"
+    | "low_confidence"
+    | "non_wildfire_zone"
+    | "outside_pilot";
   frp: number | null;
 };
 
@@ -26,7 +31,10 @@ export async function GET(request: Request) {
   try {
     env = getPipelineEnv();
   } catch {
-    return Response.json({ error: "Pipeline is not configured" }, { status: 503 });
+    return Response.json(
+      { error: "Pipeline is not configured" },
+      { status: 503 },
+    );
   }
   const authorization = request.headers.get("authorization") ?? "";
   if (
@@ -49,7 +57,9 @@ export async function GET(request: Request) {
     });
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`Supabase request failed (${response.status}): ${detail.slice(0, 500)}`);
+      throw new Error(
+        `Supabase request failed (${response.status}): ${detail.slice(0, 500)}`,
+      );
     }
     if (response.status === 204) return undefined as T;
     const body = await response.text();
@@ -60,14 +70,29 @@ export async function GET(request: Request) {
   weekStart.setUTCHours(0, 0, 0, 0);
   weekStart.setUTCDate(weekStart.getUTCDate() - 6);
   const since = weekStart.toISOString();
+  let runId: string | null = null;
+  let hotspotCount = 0;
 
   try {
+    const runRows = await supabase<{ id: string }[]>("pipeline_runs", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        job_name: "weekly_risk",
+        trigger_type: "schedule",
+        status: "running",
+      }),
+    });
+    runId = runRows[0]?.id ?? null;
+    if (!runId) throw new Error("Unable to create weekly risk pipeline run");
+
     const [regions, hotspots] = await Promise.all([
       supabase<RegionRow[]>("regions?select=id&level=eq.desa&limit=10000"),
       supabase<HotspotRow[]>(
         `hotspots?select=region_id,filter_status,frp&region_id=not.is.null&acq_at=gte.${encodeURIComponent(since)}&limit=50000`,
       ),
     ]);
+    hotspotCount = hotspots.length;
     const byRegion = new Map<string, HotspotRow[]>();
     for (const hotspot of hotspots) {
       if (!hotspot.region_id) continue;
@@ -83,7 +108,10 @@ export async function GET(request: Request) {
       const review = rows.filter((row) => row.filter_status !== "kept");
       const frps = rows
         .map((row) => row.frp)
-        .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+        .filter(
+          (value): value is number =>
+            typeof value === "number" && Number.isFinite(value),
+        );
       const response = await fetch(`${env.aiServiceUrl}/v1/risk/score`, {
         method: "POST",
         headers: {
@@ -128,16 +156,42 @@ export async function GET(request: Request) {
         })),
       ),
     });
+    await supabase(`pipeline_runs?id=eq.${encodeURIComponent(runId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: "success",
+        records_fetched: hotspotCount,
+        finished_at: new Date().toISOString(),
+      }),
+    });
     return Response.json({
       ok: true,
-      run_id: randomUUID(),
+      run_id: runId,
       week_start: since.slice(0, 10),
       regions: results.length,
       hotspots: hotspots.length,
     });
   } catch (error) {
+    if (runId) {
+      await supabase(`pipeline_runs?id=eq.${encodeURIComponent(runId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "failed",
+          records_fetched: hotspotCount,
+          error:
+            error instanceof Error
+              ? error.message.slice(0, 1000)
+              : "Risk calculation failed",
+          finished_at: new Date().toISOString(),
+        }),
+      }).catch(() => undefined);
+    }
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : "Risk calculation failed" },
+      {
+        ok: false,
+        error:
+          error instanceof Error ? error.message : "Risk calculation failed",
+      },
       { status: 502 },
     );
   }

@@ -214,7 +214,21 @@ test("consented web photo runs annotated YOLO once and stores the public annotat
         "server-only-vision-key",
       );
       return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), {
-        headers: { "content-type": "image/jpeg" },
+        headers: {
+          "content-type": "image/jpeg",
+          "x-vision-summary": JSON.stringify({
+            labels: ["fire", "wildfire_smoke"],
+            smoke_type: "wildfire_smoke",
+            scores: {
+              fire: 0.375532,
+              smoke_general: 0.581607,
+              wildfire_smoke: 0.921092,
+              industrial_smoke: 0,
+              fog: 0,
+            },
+            needs_review: false,
+          }),
+        },
       });
     }
     if (url.pathname.endsWith("/rpc/region_for_point")) {
@@ -273,7 +287,22 @@ test("consented web photo runs annotated YOLO once and stores the public annotat
       storedMedia.some(
         (media) =>
           JSON.stringify(media.detections) ===
-          JSON.stringify({ annotated: true, public_consent: true }),
+          JSON.stringify({
+            annotated: true,
+            public_consent: true,
+            vision: {
+              labels: ["fire", "wildfire_smoke"],
+              smoke_type: "wildfire_smoke",
+              scores: {
+                fire: 0.375532,
+                smoke_general: 0.581607,
+                wildfire_smoke: 0.921092,
+                industrial_smoke: 0,
+                fog: 0,
+              },
+              needs_review: false,
+            },
+          }),
       ),
       true,
     );

@@ -1,4 +1,5 @@
 
+import json
 import math
 import secrets
 from io import BytesIO
@@ -252,4 +253,9 @@ async def detect_annotated_image(
     save_options = {"quality": 95, "subsampling": 0} if image_format == "JPEG" else {}
     annotated.save(output, format=image_format, **save_options)
     media_type = "image/jpeg" if image_format == "JPEG" else "image/png"
-    return Response(content=output.getvalue(), media_type=media_type)
+    vision_summary = json.dumps(result["vision"], separators=(",", ":"))
+    return Response(
+        content=output.getvalue(),
+        media_type=media_type,
+        headers={"X-Vision-Summary": vision_summary},
+    )
