@@ -8,6 +8,7 @@ from app.api.health import router as health_router
 from app.api.v1.cluster import router as cluster_router
 from app.api.v1.hotspot_filter import router as hotspot_filter_router
 from app.api.v1.matching import router as matching_router
+from app.api.v1.risk import router as risk_router
 from app.api.v1.system import router as system_router
 from app.api.v1.vision import router as vision_router
 from app.core.config import get_settings
@@ -63,6 +64,7 @@ def create_app() -> FastAPI:
     app.include_router(vision_router)
     app.include_router(matching_router)
     app.include_router(hotspot_filter_router)
+    app.include_router(risk_router)
 
     return app
 
