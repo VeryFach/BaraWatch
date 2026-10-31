@@ -10,7 +10,7 @@ import {
   Wind,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   Area,
@@ -25,15 +25,13 @@ import { useApp } from "@/components/AppState";
 import { ClientMap } from "@/components/ClientMap";
 import { ReportDialog } from "@/components/ReportDialog";
 import { SearchSelect } from "@/components/SearchSelect";
-import { RiskDot, StatusBadge } from "@/components/StatusBadge";
-import {
-  desaList,
-  hotspots,
-  riskLabel,
-  riskVar,
-  trend7d,
-  weather,
-} from "@/lib/dummy-data";
+import { RiskDot } from "@/components/StatusBadge";
+import { type Risk, riskLabel, riskVar } from "@/lib/dummy-data";
+import type {
+  PublicHotspot,
+  PublicIncident,
+  PublicRegion,
+} from "@/lib/public-api";
 import { dashboardView, roles } from "@/lib/roles";
 
 import { cn } from "@/lib/utils";
@@ -97,36 +95,74 @@ function SectionHead({
   );
 }
 
-function WeatherRow() {
+type DashboardWeather = {
+  location: string;
+  observedAt: string | null;
+  temperatureC: number;
+  humidityPercent: number;
+  windSpeedKmh: number;
+  source: string;
+};
+
+function WeatherRow({
+  weather,
+  loading,
+  error,
+}: {
+  weather: DashboardWeather | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  const value = (number: number | undefined, suffix: string) =>
+    loading
+      ? "Memuat…"
+      : error || number === undefined
+        ? "—"
+        : `${number.toFixed(1)}${suffix}`;
+
   return (
     <div className="grid grid-cols-3 gap-3 text-sm">
       <div>
         <Droplets className="mb-1 h-4 w-4 text-muted-foreground" />
-        {weather.kelembapan === null ? "—" : `${weather.kelembapan}%`}
+        {value(weather?.humidityPercent, "%")}
         <div className="text-xs text-muted-foreground">Kelembapan</div>
       </div>
 
       <div>
         <CloudSun className="mb-1 h-4 w-4 text-muted-foreground" />
-        {weather.suhu === null ? "—" : `${weather.suhu}°C`}
+        {value(weather?.temperatureC, " °C")}
         <div className="text-xs text-muted-foreground">Suhu</div>
       </div>
 
       <div>
         <Wind className="mb-1 h-4 w-4 text-muted-foreground" />
-        14 km/j
-        <div className="text-xs text-muted-foreground">Angin tenggara</div>
+        {value(weather?.windSpeedKmh, " km/j")}
+        <div className="text-xs text-muted-foreground">Kecepatan angin</div>
+      </div>
+      <div className="col-span-3 text-xs text-muted-foreground">
+        {error ??
+          (weather?.observedAt
+            ? `${weather.location} · diperbarui ${new Intl.DateTimeFormat("id-ID", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(weather.observedAt))} WIB · ${weather.source}`
+            : (weather?.location ?? "Cuaca Kalimantan Tengah"))}
       </div>
     </div>
   );
 }
 
-function MapPreview() {
+function MapPreview({
+  hotspots: publicHotspots,
+  incidents,
+  error,
+}: {
+  hotspots: PublicHotspot[] | undefined;
+  incidents: PublicIncident[];
+  error: string | null;
+}) {
   return (
     <div className={cn(card, "overflow-hidden")}>
       <SectionHead
         title="Peta sekilas"
-        sub="Titik api dan zona risiko desa"
+        sub={error ?? "Hotspot tersaring dan insiden dari database"}
         action={
           <Link
             href="/peta"
@@ -139,46 +175,114 @@ function MapPreview() {
       />
 
       <div className="h-80">
-        <ClientMap showRisk showHotspots hideFalse compact />
+        <ClientMap
+          showRisk={false}
+          showHotspots
+          hideFalse
+          compact
+          publicHotspots={publicHotspots}
+          publicIncidents={incidents}
+        />
       </div>
     </div>
   );
 }
 
-function RawanCard() {
-  const rawan = desaList.filter(
-    (desa) => desa.risk === "ekstrem" || desa.risk === "tinggi",
-  );
+type PublicRiskRow = {
+  region_id: string;
+  region_code: string;
+  region_name: string;
+  region_level: string;
+  week_start: string;
+  risk_level: string;
+  score: number | null;
+  top_reasons: string[];
+  method: string;
+};
+
+type DashboardRegion = PublicRegion & {
+  district: string | null;
+  subdistrict: string | null;
+};
+
+type TrendPoint = { hari: string; mentah: number; tersaring: number };
+
+function riskValue(value: string): Risk | null {
+  return ["rendah", "sedang", "tinggi", "ekstrem"].includes(value)
+    ? (value as Risk)
+    : null;
+}
+
+function RawanCard({
+  risks,
+  regions,
+  error,
+}: {
+  risks: PublicRiskRow[];
+  regions: DashboardRegion[];
+  error: string | null;
+}) {
+  const regionById = new Map(regions.map((region) => [region.id, region]));
+  const rawan = risks
+    .filter((row) => row.region_level === "desa")
+    .map((row) => ({ ...row, risk: riskValue(row.risk_level) }))
+    .filter((row) => row.risk === "ekstrem" || row.risk === "tinggi")
+    .sort((left, right) => (right.score ?? 0) - (left.score ?? 0));
 
   return (
     <div className={cn(card, "p-6")}>
       <h2 className="font-semibold">Desa paling rawan</h2>
 
       <p className="text-sm text-muted-foreground">
-        Prediksi risiko minggu ini
+        Prediksi risiko mingguan dari hasil pipeline
       </p>
 
       <ul className="mt-4 space-y-4">
-        {rawan.slice(0, 4).map((desa) => (
-          <li
-            key={desa.nama}
-            className="flex items-start justify-between gap-4"
-          >
-            <div>
-              <div className="font-medium">{desa.nama}</div>
-
-              <div className="text-sm text-muted-foreground">{desa.alasan}</div>
-            </div>
-
-            <RiskDot risk={desa.risk} />
+        {rawan.slice(0, 4).map((desa) => {
+          const region = regionById.get(desa.region_id);
+          const subdistrict = region?.parent_id
+            ? regionById.get(region.parent_id)
+            : undefined;
+          const district = subdistrict?.parent_id
+            ? regionById.get(subdistrict.parent_id)
+            : undefined;
+          return (
+            <li
+              key={desa.region_id}
+              className="flex items-start justify-between gap-4"
+            >
+              <div>
+                <div className="font-medium">{desa.region_name}</div>
+                <div className="text-sm text-muted-foreground">
+                  {desa.top_reasons.join(" · ") ||
+                    "Alasan risiko belum tersedia"}
+                  {district ? ` · ${district.name}` : ""}
+                </div>
+              </div>
+              {desa.risk && <RiskDot risk={desa.risk} />}
+            </li>
+          );
+        })}
+        {error && <li className="text-sm text-destructive">{error}</li>}
+        {!error && rawan.length === 0 && (
+          <li className="text-sm text-muted-foreground">
+            Belum ada desa berisiko tinggi pada data risiko mingguan.
           </li>
-        ))}
+        )}
       </ul>
     </div>
   );
 }
 
-function TrendCard() {
+function TrendCard({
+  data,
+  loading,
+  error,
+}: {
+  data: TrendPoint[];
+  loading: boolean;
+  error: string | null;
+}) {
   return (
     <div className={cn(card, "p-6")}>
       <h2 className="font-semibold">Tren 7 hari</h2>
@@ -189,7 +293,7 @@ function TrendCard() {
 
       <div className="mt-6 h-56">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={trend7d} margin={{ left: -20, right: 4 }}>
+          <AreaChart data={data} margin={{ left: -20, right: 4 }}>
             <CartesianGrid vertical={false} stroke="var(--border)" />
 
             <XAxis
@@ -235,22 +339,24 @@ function TrendCard() {
           </AreaChart>
         </ResponsiveContainer>
       </div>
+      {loading && <p className="text-xs text-muted-foreground">Memuat tren…</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }
 
-function AlertList() {
-  const { statusOf } = useApp();
-
-  const list = hotspots
-    .filter((hotspot) => statusOf(hotspot.id) !== "bukan-api")
-    .slice(0, 6);
-
+function AlertList({
+  incidents,
+  error,
+}: {
+  incidents: PublicIncident[];
+  error: string | null;
+}) {
   return (
     <div className={card}>
       <SectionHead
         title="Kejadian terbaru"
-        sub="Kalimantan Tengah · hari ini"
+        sub={error ?? "Insiden terbaru dari database"}
         action={
           <Link
             href="/kejadian?jenis=kejadian"
@@ -263,33 +369,52 @@ function AlertList() {
       />
 
       <ul className="divide-y">
-        {list.map((hotspot) => {
-          const status = statusOf(hotspot.id);
-
+        {incidents.slice(0, 6).map((incident) => {
           return (
             <li
-              key={hotspot.id}
+              key={incident.id}
               className="flex flex-wrap items-center gap-4 px-6 py-4"
             >
               <span className="w-12 text-sm tabular-nums text-muted-foreground">
-                {hotspot.waktu}
+                {new Intl.DateTimeFormat("id-ID", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  timeZone: "Asia/Jakarta",
+                }).format(new Date(incident.lastDetectedAt))}
               </span>
 
               <Link
-                href={`/peta?id=${encodeURIComponent(hotspot.id)}`}
+                href={`/peta?id=${encodeURIComponent(incident.id)}`}
                 className="min-w-0 flex-1 hover:underline"
               >
-                <div className="truncate font-medium">{hotspot.desa}</div>
+                <div className="truncate font-medium">
+                  {incident.regionName ?? "Lokasi belum tersedia"}
+                </div>
 
                 <div className="text-sm text-muted-foreground">
-                  {hotspot.kabupaten} · {hotspot.gambut ? "Gambut" : "Mineral"}
+                  {incident.source === "both"
+                    ? "Satelit dan laporan"
+                    : incident.source === "satellite"
+                      ? "Satelit"
+                      : "Laporan warga"}{" "}
+                  · {incident.hotspotCount} hotspot
                 </div>
               </Link>
 
-              <StatusBadge status={status} />
+              <span className="rounded-full bg-muted px-2.5 py-1 text-xs capitalize text-muted-foreground">
+                {incident.status.replaceAll("_", " ")}
+              </span>
             </li>
           );
         })}
+        {error && (
+          <li className="px-6 py-6 text-sm text-destructive">{error}</li>
+        )}
+        {!error && incidents.length === 0 && (
+          <li className="px-6 py-6 text-sm text-muted-foreground">
+            Belum ada insiden untuk ditampilkan.
+          </li>
+        )}
       </ul>
     </div>
   );
@@ -355,52 +480,135 @@ export default function DashboardPage() {
 }
 
 function PublicDashboard() {
-  const { laporan, statusOf } = useApp();
-
-  const [desa, setDesa] = useState("Kalampangan");
+  const { laporan, reportsLoading, reportsError } = useApp();
+  const [hotspots, setHotspots] = useState<PublicHotspot[]>([]);
+  const [incidents, setIncidents] = useState<PublicIncident[]>([]);
+  const [risks, setRisks] = useState<PublicRiskRow[]>([]);
+  const [regions, setRegions] = useState<DashboardRegion[]>([]);
+  const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [weather, setWeather] = useState<DashboardWeather | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [hotspotError, setHotspotError] = useState<string | null>(null);
+  const [incidentError, setIncidentError] = useState<string | null>(null);
+  const [riskError, setRiskError] = useState<string | null>(null);
+  const [regionError, setRegionError] = useState<string | null>(null);
+  const [trendError, setTrendError] = useState<string | null>(null);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(true);
   const [kabupaten, setKabupaten] = useState("all");
   const [kecamatan, setKecamatan] = useState("all");
+  const [desa, setDesa] = useState("all");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const load = async () => {
+      const endpoints = [
+        ["hotspots", "/api/public/hotspots?limit=200"],
+        ["incidents", "/api/public/incidents?limit=200"],
+        ["risks", "/api/public/risk"],
+        ["regions", "/api/public/regions?include_geometry=false"],
+        ["trend", "/api/public/hotspot-trend"],
+        ["weather", "/api/public/weather"],
+      ] as const;
+      const results = await Promise.allSettled(
+        endpoints.map(async ([key, url]) => {
+          const response = await fetch(url, {
+            signal: controller.signal,
+            cache: "no-store",
+          });
+          const body = await response.json();
+          if (!response.ok) throw new Error(body.error ?? `${key} unavailable`);
+          return [key, body.data] as const;
+        }),
+      );
+      if (controller.signal.aborted) return;
+      for (const [index, result] of results.entries()) {
+        if (result.status === "rejected") {
+          const key = endpoints[index][0];
+          const message = "Data sedang tidak tersedia.";
+          if (key === "hotspots") setHotspotError(message);
+          if (key === "incidents") setIncidentError(message);
+          if (key === "risks") setRiskError(message);
+          if (key === "regions") setRegionError(message);
+          if (key === "trend") setTrendError(message);
+          if (key === "weather") {
+            setWeatherError(message);
+            setWeatherLoading(false);
+          }
+          continue;
+        }
+        const [key, data] = result.value;
+        if (key === "hotspots") setHotspots(data as PublicHotspot[]);
+        if (key === "incidents") setIncidents(data as PublicIncident[]);
+        if (key === "risks") setRisks(data as PublicRiskRow[]);
+        if (key === "trend") setTrend(data as TrendPoint[]);
+        if (key === "weather") {
+          setWeather(data as DashboardWeather);
+          setWeatherLoading(false);
+        }
+        if (key === "regions") {
+          const rows = data as PublicRegion[];
+          setRegions(
+            rows.map((region) => ({
+              ...region,
+              district: null,
+              subdistrict: null,
+            })),
+          );
+        }
+      }
+      setLoading(false);
+    };
+    void load();
+    return () => controller.abort();
+  }, []);
+
+  const regionById = useMemo(
+    () => new Map(regions.map((region) => [region.id, region])),
+    [regions],
+  );
   const kabupatenOptions = useMemo(
-    () => [...new Set(desaList.map((item) => item.kabupaten))].sort(),
-    [],
+    () => regions.filter((region) => region.level === "kabupaten"),
+    [regions],
   );
   const kecamatanOptions = useMemo(
     () =>
-      [
-        ...new Set(
-          desaList
-            .filter(
-              (item) => kabupaten === "all" || item.kabupaten === kabupaten,
-            )
-            .map((item) => item.kecamatan),
-        ),
-      ].sort(),
-    [kabupaten],
+      regions.filter(
+        (region) =>
+          region.level === "kecamatan" &&
+          (kabupaten === "all" || region.parent_id === kabupaten),
+      ),
+    [regions, kabupaten],
   );
   const desaOptions = useMemo(
     () =>
-      desaList.filter(
-        (item) =>
-          (kabupaten === "all" || item.kabupaten === kabupaten) &&
-          (kecamatan === "all" || item.kecamatan === kecamatan),
+      regions.filter(
+        (region) =>
+          region.level === "desa" &&
+          (kecamatan !== "all"
+            ? region.parent_id === kecamatan
+            : kabupaten === "all" ||
+              (region.parent_id !== null &&
+                regionById.get(region.parent_id)?.parent_id === kabupaten)),
       ),
-    [kabupaten, kecamatan],
+    [regions, regionById, kabupaten, kecamatan],
   );
-
   const selectedDesa =
-    desaOptions.find((item) => item.nama === desa) ??
-    desaOptions[0] ??
-    desaList[0];
-
-  if (!selectedDesa) return null;
-
-  const aktif = hotspots.filter((hotspot) =>
-    ["baru", "diverifikasi", "ditangani"].includes(statusOf(hotspot.id)),
+    desaOptions.find((region) => region.id === desa) ??
+    desaOptions.find((region) => region.name.toLowerCase() === "kalampangan") ??
+    desaOptions[0];
+  const selectedRisk = selectedDesa
+    ? risks.find((risk) => risk.region_id === selectedDesa.id)
+    : undefined;
+  const selectedRiskLevel = selectedRisk
+    ? riskValue(selectedRisk.risk_level)
+    : null;
+  const rawan = risks.filter(
+    (row) =>
+      row.region_level === "desa" &&
+      ["tinggi", "ekstrem"].includes(row.risk_level),
   ).length;
-
-  const rawan = desaList.filter(
-    (item) => item.risk === "tinggi" || item.risk === "ekstrem",
-  ).length;
+  const hotspotsToday = trend.at(-1)?.tersaring ?? 0;
 
   return (
     <main className="mx-auto max-w-7xl space-y-8 px-4 py-10 sm:px-6">
@@ -419,8 +627,9 @@ function PublicDashboard() {
           className="flex items-center gap-2 rounded-full bg-destructive/10 px-5 py-2.5 text-sm font-medium text-destructive transition hover:bg-destructive/15"
         >
           <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />
-          {hotspots.filter((h) => statusOf(h.id) === "baru").length} titik api
-          baru
+          {loading
+            ? "Memuat hotspot…"
+            : (hotspotError ?? `${hotspotsToday} hotspot tersaring hari ini`)}
           <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
@@ -429,25 +638,35 @@ function PublicDashboard() {
       <section className="grid gap-4 sm:grid-cols-3">
         <Stat
           icon={Flame}
-          label="Titik api aktif"
-          value={String(aktif)}
-          hint="Di wilayah pantauan"
+          label="Hotspot tersaring 7 hari"
+          value={
+            trendError
+              ? "—"
+              : String(trend.reduce((sum, point) => sum + point.tersaring, 0))
+          }
+          hint={trendError ?? "Jumlah berdasarkan waktu observasi"}
           tone="bg-destructive/10 text-destructive"
         />
 
         <Stat
           icon={AlertTriangle}
           label="Desa berisiko tinggi"
-          value={String(rawan)}
-          hint="Risiko tinggi dan ekstrem"
+          value={riskError ? "—" : String(rawan)}
+          hint={riskError ?? "Desa dengan risiko tinggi atau ekstrem"}
           tone="bg-risk-medium/20 text-foreground"
         />
 
         <Stat
           icon={CloudSun}
-          label="Hari tanpa hujan"
-          value={String(weather.hariTanpaHujan)}
-          hint="Rata-rata provinsi"
+          label="Suhu Kalimantan Tengah"
+          value={
+            weatherError
+              ? "—"
+              : weather
+                ? `${weather.temperatureC.toFixed(1)} °C`
+                : "Memuat…"
+          }
+          hint={weatherError ?? "Data terkini dari Open-Meteo"}
           tone="bg-forest/10 text-forest"
         />
       </section>
@@ -470,7 +689,10 @@ function PublicDashboard() {
               }}
               options={[
                 { value: "all", label: "Semua kabupaten" },
-                ...kabupatenOptions.map((value) => ({ value, label: value })),
+                ...kabupatenOptions.map((region) => ({
+                  value: region.id,
+                  label: region.name,
+                })),
               ]}
               triggerClassName="text-foreground"
             />
@@ -483,7 +705,10 @@ function PublicDashboard() {
               }}
               options={[
                 { value: "all", label: "Semua kecamatan" },
-                ...kecamatanOptions.map((value) => ({ value, label: value })),
+                ...kecamatanOptions.map((region) => ({
+                  value: region.id,
+                  label: region.name,
+                })),
               ]}
               triggerClassName="text-foreground"
             />
@@ -494,9 +719,9 @@ function PublicDashboard() {
               onChange={setDesa}
               options={[
                 { value: "all", label: "Semua desa" },
-                ...desaOptions.map((item) => ({
-                  value: item.nama,
-                  label: item.nama,
+                ...desaOptions.map((region) => ({
+                  value: region.id,
+                  label: region.name,
                 })),
               ]}
               triggerClassName="text-foreground"
@@ -507,12 +732,18 @@ function PublicDashboard() {
             <div
               className="flex h-20 w-20 items-center justify-center rounded-2xl"
               style={{
-                background: `color-mix(in oklab, ${riskVar[selectedDesa.risk]} 20%, transparent)`,
+                background: selectedRiskLevel
+                  ? `color-mix(in oklab, ${riskVar[selectedRiskLevel]} 20%, transparent)`
+                  : "var(--muted)",
               }}
             >
               <AlertTriangle
                 className="h-9 w-9"
-                style={{ color: riskVar[selectedDesa.risk] }}
+                style={{
+                  color: selectedRiskLevel
+                    ? riskVar[selectedRiskLevel]
+                    : "var(--muted-foreground)",
+                }}
               />
             </div>
 
@@ -523,19 +754,40 @@ function PublicDashboard() {
 
               <div
                 className="text-3xl font-semibold"
-                style={{ color: riskVar[selectedDesa.risk] }}
+                style={{
+                  color: selectedRiskLevel
+                    ? riskVar[selectedRiskLevel]
+                    : undefined,
+                }}
               >
-                {riskLabel[selectedDesa.risk]}
+                {loading
+                  ? "Memuat…"
+                  : riskError
+                    ? "Tidak tersedia"
+                    : selectedRiskLevel
+                      ? riskLabel[selectedRiskLevel]
+                      : "Belum tersedia"}
               </div>
 
               <div className="mt-1 text-sm text-muted-foreground">
-                Karena {selectedDesa.alasan.toLowerCase()}
+                {riskError || regionError
+                  ? (riskError ?? regionError)
+                  : selectedRisk
+                    ? selectedRisk.top_reasons.join(" · ") ||
+                      "Alasan belum tersedia"
+                    : selectedDesa
+                      ? `Belum ada skor untuk ${selectedDesa.name}`
+                      : "Pilih desa untuk melihat skor risiko"}
               </div>
             </div>
           </div>
 
           <div className="mt-8 border-t pt-6">
-            <WeatherRow />
+            <WeatherRow
+              weather={weather}
+              loading={weatherLoading}
+              error={weatherError}
+            />
           </div>
         </div>
 
@@ -549,7 +801,7 @@ function PublicDashboard() {
               Laporkan sekarang. Tim desa dan petugas akan menindaklanjuti.
             </p>
 
-            <ReportDialog defaultDesa={desa}>
+            <ReportDialog defaultDesa={selectedDesa?.name ?? ""}>
               <button
                 type="button"
                 className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90"
@@ -575,27 +827,31 @@ function PublicDashboard() {
       {/* MAP + HIGH RISK VILLAGES */}
       <section className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
-          <MapPreview />
+          <MapPreview
+            hotspots={hotspots}
+            incidents={incidents}
+            error={hotspotError ?? incidentError}
+          />
         </div>
 
         <div className="lg:col-span-2">
-          <RawanCard />
+          <RawanCard risks={risks} regions={regions} error={riskError} />
         </div>
       </section>
 
       {/* HOTSPOT TREND */}
       <section>
-        <TrendCard />
+        <TrendCard data={trend} loading={loading} error={trendError} />
       </section>
 
       {/* RECENT INCIDENTS */}
-      <AlertList />
+      <AlertList incidents={incidents} error={incidentError} />
 
       {/* COMMUNITY REPORTS */}
       <section className={card}>
         <SectionHead
           title="Laporan masyarakat"
-          sub="Status laporan api dan asap"
+          sub={reportsError ?? "Status laporan api dan asap"}
           action={
             <Link
               href="/kejadian?jenis=laporan"
@@ -627,6 +883,16 @@ function PublicDashboard() {
               <LaporanBadge status={item.status} />
             </li>
           ))}
+          {!reportsLoading && laporan.length === 0 && (
+            <li className="px-6 py-6 text-sm text-muted-foreground">
+              {reportsError ?? "Belum ada laporan masyarakat."}
+            </li>
+          )}
+          {reportsLoading && (
+            <li className="px-6 py-6 text-sm text-muted-foreground">
+              Memuat laporan…
+            </li>
+          )}
         </ul>
       </section>
     </main>
