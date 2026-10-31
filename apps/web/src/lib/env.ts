@@ -20,6 +20,7 @@ export function getServerEnv() {
     healthcheckKey: process.env.HEALTHCHECK_KEY,
     aiServiceUrl: process.env.AI_SERVICE_URL,
     aiServiceApiKey: process.env.AI_SERVICE_API_KEY,
+    aiInternalKey: process.env.AI_INTERNAL_KEY,
     storageBucket: process.env.WHATSAPP_STORAGE_BUCKET ?? "whatsapp-reports",
   };
 }

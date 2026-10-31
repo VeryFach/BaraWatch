@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import {
   CircleMarker,
   MapContainer,
@@ -21,6 +21,7 @@ import {
   statusLabel,
 } from "@/lib/dummy-data";
 import type { PublicRegionBoundary, PublicReport } from "@/lib/public-api";
+import type { PublicHotspot, PublicIncident } from "@/lib/public-api";
 
 interface Props {
   showRisk: boolean;
@@ -38,6 +39,9 @@ interface Props {
   reports?: PublicReport[];
   regions?: PublicRegionBoundary[];
   regionLevels?: PublicRegionBoundary["level"][];
+  publicHotspots?: PublicHotspot[];
+  publicIncidents?: PublicIncident[];
+  onSelectPublicHotspot?: (hotspot: PublicHotspot) => void;
 }
 
 type LocatedReport = PublicReport & {
@@ -75,17 +79,27 @@ const css = (v: string) =>
 
 function FocusHotspot({
   selectedId,
+  publicHotspots,
 }: {
   selectedId?: string | null | undefined;
+  publicHotspots?: PublicHotspot[];
 }) {
   const map = useMap();
   useEffect(() => {
-    const h = hotspots.find((row) => row.id === selectedId);
-    if (h)
-      map.setView([h.lat, h.lng], Math.max(map.getZoom(), 10), {
+    const live = publicHotspots?.find((row) => row.id === selectedId);
+    const fixture = publicHotspots === undefined
+      ? hotspots.find((row) => row.id === selectedId)
+      : undefined;
+    const coordinates = live
+      ? [live.latitude, live.longitude] as [number, number]
+      : fixture
+        ? [fixture.lat, fixture.lng] as [number, number]
+        : null;
+    if (coordinates)
+      map.setView(coordinates, Math.max(map.getZoom(), 10), {
         animate: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
       });
-  }, [map, selectedId]);
+  }, [map, selectedId, publicHotspots]);
   return null;
 }
 
@@ -127,6 +141,9 @@ export default function FireMap({
   reports = [],
   regions = [],
   regionLevels = [],
+  publicHotspots,
+  publicIncidents = [],
+  onSelectPublicHotspot,
 }: Props) {
   const { statusOf } = useApp();
   const list = hotspots
@@ -158,7 +175,7 @@ export default function FireMap({
       zoomControl={!compact}
       className="h-full w-full z-0"
     >
-      <FocusHotspot selectedId={selectedId} />
+      <FocusHotspot selectedId={selectedId} publicHotspots={publicHotspots} />
       <FocusReport
         report={reports.find((report) => report.id === selectedReportId)}
       />
@@ -231,7 +248,33 @@ export default function FireMap({
               </Tooltip>
             </CircleMarker>
           ))}
-      {showHotspots &&
+      {showHotspots && publicHotspots !== undefined &&
+        publicHotspots.map((h) => (
+          <CircleMarker
+            key={`live-hotspot-${h.id}`}
+            center={[h.latitude, h.longitude]}
+            radius={selectedId === h.id ? 10 : 6}
+            eventHandlers={{ click: () => onSelectPublicHotspot?.(h) }}
+            pathOptions={{
+              color: css("var(--map-marker-stroke)"),
+              weight: 2,
+              fillColor: css("var(--risk-extreme)"),
+              fillOpacity: 1,
+            }}
+          >
+            <Popup>
+              <b>{h.regionName ?? "Hotspot FIRMS"}</b>
+              <br />
+              {new Date(h.acqAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB
+              <br />
+              {h.satellite} · {h.instrument}
+              <br />
+              Confidence {h.confidenceLevel ?? "tidak diketahui"}
+              {h.frp === null ? "" : ` · FRP ${h.frp} MW`}
+            </Popup>
+          </CircleMarker>
+        ))}
+      {showHotspots && publicHotspots === undefined &&
         list.map((h) => {
           const off = h.status === "bukan-api" || h.status === "selesai";
           const sel = selectedId === h.id;
@@ -260,6 +303,30 @@ export default function FireMap({
             </CircleMarker>
           );
         })}
+      {showHotspots && publicHotspots !== undefined &&
+        publicIncidents
+          .filter((incident) => incident.latitude !== null && incident.longitude !== null)
+          .map((incident) => (
+            <CircleMarker
+              key={`live-incident-${incident.id}`}
+              center={[incident.latitude as number, incident.longitude as number]}
+              radius={11}
+              pathOptions={{
+                color: css("var(--primary)"),
+                fillColor: css("var(--primary)"),
+                fillOpacity: 0.75,
+                weight: 2,
+              }}
+            >
+              <Popup>
+                <b>Insiden · {incident.regionName ?? "Wilayah belum tersedia"}</b>
+                <br />
+                {incident.hotspotCount} hotspot · {incident.status}
+                <br />
+                Terakhir terdeteksi {new Date(incident.lastDetectedAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB
+              </Popup>
+            </CircleMarker>
+          ))}
       {showReports &&
         reports
           .filter(
