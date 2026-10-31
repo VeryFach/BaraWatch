@@ -12,11 +12,26 @@ export async function notifyMpa(
   labels: string[] = [],
 ) {
   const regionNames = await getReportRegionNames(regionId);
+  if (!regionId) return 0;
+
+  const regions = await supabaseRequest<Region[]>(
+    "regions?select=id,parent_id,level,code,name&limit=10000",
+  );
+  const regionById = new Map(regions.map((region) => [region.id, region]));
+  const coveredRegionIds = new Set<string>();
+  let currentRegionId: string | null = regionId;
+  while (currentRegionId) {
+    coveredRegionIds.add(currentRegionId);
+    currentRegionId = regionById.get(currentRegionId)?.parent_id ?? null;
+  }
+
   const mpas = await supabaseRequest<Contact[]>(
     "contacts?role=eq.mpa&opted_out_at=is.null&select=id,phone_e164,role,assigned_region_id,last_inbound_at",
   );
   const targets = mpas.filter(
-    (mpa) => !regionId || mpa.assigned_region_id === regionId,
+    (mpa) =>
+      mpa.assigned_region_id !== null &&
+      coveredRegionIds.has(mpa.assigned_region_id),
   );
   const body =
     `🚨 Laporan baru\nID: ${reportId}\n` +
