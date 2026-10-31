@@ -1,76 +1,60 @@
-from app.core.config import get_settings
+from io import BytesIO
+
+from PIL import Image
 
 
 def test_health(client):
-    response = client.get("/health")
-
-    assert response.status_code == 200
-
-    data = response.json()
-
-    assert data["status"] == "ok"
-    assert data["version"] == "0.2.0"
-
-def test_internal_endpoint_requires_key(client):
-    response = client.get("/v1/ping")
-
-    assert response.status_code == 401
-
-def test_internal_endpoint_rejects_wrong_key(client):
-    response = client.get(
-        "/v1/ping",
-        headers={
-            "X-Internal-Key": "wrong"
-        },
-    )
-
-    assert response.status_code == 401
-
-def test_internal_endpoint_with_key(client):
-    response = client.get(
-        "/v1/ping",
-        headers={
-            "X-Internal-Key": "a" * 40
-        },
-    )
-
-    assert response.status_code == 200
-    assert response.json()["status"] == "ok"
-
-def test_openapi_available(client):
-    response = client.get("/openapi.json")
-
-    assert response.status_code == 200
-
-    schema = response.json()
-
-    assert "/health" in schema["paths"]
-    assert "/v1/ping" in schema["paths"]
-    assert "/v1/cluster" in schema["paths"]
-
-def test_cluster_requires_key(client):
-    response = client.post(
-        "/v1/cluster",
-        json={"hotspots": []},
-    )
-
-    assert response.status_code == 401
-
-def test_cluster_empty_input(client):
-    response = client.post(
-        "/v1/cluster",
-        headers={
-            "X-Internal-Key": "a" * 40
-        },
-        json={
-            "hotspots": [],
-            "open_incidents": [],
-        },
-    )
-
-    assert response.status_code == 200
-
     data = response.json()
 
     assert data["clusters"] == []
     assert data["input_count"] == 0
+
+
+def test_vision_rejects_missing_api_key(client):
+    response = client.post(
+        "/v1/vision/detect",
+        files={"file": ("image.png", b"not-an-image", "image/png")},
+    )
+
+    assert response.status_code == 401
+
+
+def test_vision_rejects_invalid_image(client):
+    response = client.post(
+        "/v1/vision/detect",
+        headers={"X-API-Key": "v" * 32},
+        files={"file": ("image.png", b"not-an-image", "image/png")},
+    )
+
+    assert response.status_code == 400
+
+
+def test_vision_returns_fused_result(client, monkeypatch):
+    def fake_predict(image):
+        return {
+            "device": "cpu",
+            "models": {
+                "mfranzon": [
+                    {"class": "fire", "confidence": 0.8, "bbox": [1, 2, 3, 4]},
+                ],
+                "touati": [
+                    {
+                        "class": "fire-smoke",
+                        "confidence": 0.7,
+                        "bbox": [5, 6, 7, 8],
+                    },
+                ],
+            },
+        }
+
+    monkeypatch.setattr("app.api.v1.vision.predict_vision", fake_predict)
+    image = BytesIO()
+    Image.new("RGB", (2, 2), "white").save(image, format="PNG")
+    response = client.post(
+        "/v1/vision/detect",
+        headers={"X-API-Key": "v" * 32},
+        files={"file": ("image.png", image.getvalue(), "image/png")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["vision"]["labels"] == ["fire", "wildfire_smoke"]

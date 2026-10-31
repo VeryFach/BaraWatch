@@ -16,6 +16,9 @@ models/weights/*
 data/raw/*
 !data/raw/.gitkeep
 data/processed/*
+data/vision/*
 !data/processed/.gitkeep
 outputs/**/*
 !outputs/.gitkeep
+experiments/**/*
+!experiments/.gitkeep

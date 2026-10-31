@@ -5,7 +5,8 @@ from app.api.v1.cluster import router as cluster_router
 from app.core.config import get_settings
 from app.core.logging import setup_logging
 from app.api.v1.system import router as system_router
-
+from app.api.v1.system import router as system_router
+from app.api.v1.vision import router as vision_router
 
 def create_app() -> FastAPI:
 
@@ -50,8 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(system_router)
     app.include_router(cluster_router)
-
+    app.include_router(vision_router)
     return app
-
 
 app = create_app()

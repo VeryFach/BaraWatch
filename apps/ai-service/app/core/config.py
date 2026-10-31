@@ -10,6 +10,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
     app_name: str = "BaraWatch AI"
@@ -25,6 +26,11 @@ class Settings(BaseSettings):
 
     ai_internal_key: str = Field(default="", repr=False)
     firms_map_key: str = Field(default="", repr=False)
+    vision_api_key: str = Field(
+        default="",
+        validation_alias="BARAWATCH_AI_API_KEY",
+        repr=False,
+    )
 
     @model_validator(mode="after")
     def validate_security(self):

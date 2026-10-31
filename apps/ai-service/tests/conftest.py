@@ -15,6 +15,7 @@ def client():
             _env_file=None,
             app_env="test",
             ai_internal_key=TEST_INTERNAL_KEY,
+            vision_api_key="v" * 32,
         )
 
     app.dependency_overrides[get_settings] = override_settings
