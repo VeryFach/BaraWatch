@@ -29,7 +29,6 @@ export async function routeInbound(message: Inbound): Promise<string> {
     const mpaResponse = await handleMpaMessage(contact, session, body);
     if (mpaResponse) return mpaResponse;
   }
-  if (body === "3" || body === "bantuan" || body === "help") return HELP;
 
   if (
     ["choosing_kabupaten", "choosing_kecamatan", "choosing_desa"].includes(
@@ -49,6 +48,7 @@ export async function routeInbound(message: Inbound): Promise<string> {
     });
     return "Foto diterima. Sekarang mohon bagikan Lokasi Terkini (*Share Location*) Anda.";
   }
+  if (body === "3" || body === "bantuan" || body === "help") return HELP;
   if (
     session.state === "awaiting_location" &&
     message.latitude !== undefined &&
