@@ -14,14 +14,24 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { desaList, statusLabel } from "@/lib/dummy-data";
+import {
+  desaList,
+  hotspots,
+  statusLabel,
+  type Hotspot,
+} from "@/lib/dummy-data";
 import {
   defaultMapFilters,
   filterHotspots,
   filterVillages,
   type MapFilters,
 } from "@/lib/map-filters";
-import type { PublicRegionBoundary, PublicReport } from "@/lib/public-api";
+import type {
+  PublicHotspot,
+  PublicIncident,
+  PublicRegionBoundary,
+  PublicReport,
+} from "@/lib/public-api";
 import { cn } from "@/lib/utils";
 
 export default function MapPage() {
@@ -47,30 +57,96 @@ function MapContent() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [regions, setRegions] = useState<PublicRegionBoundary[]>([]);
   const [reports, setReports] = useState<PublicReport[]>([]);
+  const [publicHotspots, setPublicHotspots] = useState<
+    PublicHotspot[] | undefined
+  >();
+  const [publicIncidents, setPublicIncidents] = useState<PublicIncident[]>([]);
   const [regionLevels, setRegionLevels] = useState<
     PublicRegionBoundary["level"][]
-  >([]);
+  >(["kabupaten", "kecamatan", "desa"]);
   const [mapDataError, setMapDataError] = useState<string | null>(null);
   useEffect(() => {
-    Promise.all([
-      fetch("/api/public/regions").then(async (response) => {
-        if (!response.ok) throw new Error("regions");
-        return (await response.json()) as { data: PublicRegionBoundary[] };
-      }),
-      fetch("/api/public/reports").then(async (response) => {
-        if (!response.ok) throw new Error("reports");
-        return (await response.json()) as { data: PublicReport[] };
-      }),
-    ])
-      .then(([regionResult, reportResult]) => {
-        setRegions(regionResult.data);
-        setReports(reportResult.data);
-      })
-      .catch(() =>
-        setMapDataError("Data wilayah dan laporan belum dapat dimuat."),
-      );
+    const load = async () => {
+      const results = await Promise.allSettled([
+        fetch("/api/public/regions"),
+        fetch("/api/public/reports"),
+        fetch("/api/public/hotspots?limit=200"),
+        fetch("/api/public/incidents?limit=200"),
+      ]);
+      const [regionResult, reportResult, hotspotResult, incidentResult] =
+        results;
+      if (regionResult.status === "fulfilled" && regionResult.value.ok) {
+        const body = (await regionResult.value.json()) as {
+          data: PublicRegionBoundary[];
+        };
+        setRegions(body.data);
+      } else {
+        setMapDataError("Batas wilayah belum dapat dimuat dari backend.");
+      }
+      if (reportResult.status === "fulfilled" && reportResult.value.ok) {
+        const body = (await reportResult.value.json()) as {
+          data: PublicReport[];
+        };
+        setReports(body.data);
+      }
+      if (hotspotResult.status === "fulfilled" && hotspotResult.value.ok) {
+        const body = (await hotspotResult.value.json()) as {
+          data: PublicHotspot[];
+        };
+        setPublicHotspots(body.data);
+      } else {
+        setPublicHotspots([]);
+      }
+      if (incidentResult.status === "fulfilled" && incidentResult.value.ok) {
+        const body = (await incidentResult.value.json()) as {
+          data: PublicIncident[];
+        };
+        setPublicIncidents(body.data);
+      }
+    };
+    void load();
   }, []);
-  const list = useMemo(() => filterHotspots([], filters), [filters]);
+  const liveList = useMemo<Hotspot[] | undefined>(
+    () =>
+      publicHotspots?.map((hotspot) => ({
+        id: hotspot.id,
+        desa: hotspot.regionName ?? "Wilayah belum tersedia",
+        kecamatan: hotspot.regionDistrict ?? "Wilayah belum tersedia",
+        kabupaten: hotspot.regionDistrict ?? "Wilayah belum tersedia",
+        lat: hotspot.latitude,
+        lng: hotspot.longitude,
+        confidence:
+          hotspot.confidenceLevel === "high"
+            ? 90
+            : hotspot.confidenceLevel === "nominal"
+              ? 65
+              : 35,
+        confidenceLevel: hotspot.confidenceLevel,
+        gambut: hotspot.inPeat,
+        status: "baru",
+        waktu: new Date(hotspot.acqAt).toLocaleTimeString("id-ID", {
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: "Asia/Jakarta",
+        }),
+        waktuIso: hotspot.acqAt,
+        sumber: "FIRMS",
+        satellite: hotspot.satellite,
+        instrument: hotspot.instrument,
+        sourceProduct: null,
+        frp: hotspot.frp,
+        brightness: null,
+        daynight: null,
+        luasHa: null,
+        incidentId: hotspot.incidentId,
+        filterStatus: "kept",
+      })),
+    [publicHotspots],
+  );
+  const list = useMemo(
+    () => filterHotspots(liveList ?? hotspots, filters),
+    [filters, liveList],
+  );
   const reportList = useMemo(() => {
     const query = filters.query.trim().toLowerCase();
     return reports.filter((report) => {
@@ -375,7 +451,7 @@ function MapContent() {
       <section className="relative order-1 min-h-[48vh] flex-1 md:order-2">
         <ClientMap
           showRisk={showRisk}
-          showHotspots={false}
+          showHotspots
           showReports={showReports}
           hideFalse={filters.hideFalse}
           selectedId={selectedId}
@@ -391,6 +467,11 @@ function MapContent() {
           hotspotIds={list.map((h) => h.id)}
           villageNames={villages.map((v) => v.nama)}
           reports={reports}
+          publicHotspots={publicHotspots}
+          publicIncidents={publicIncidents}
+          onSelectPublicHotspot={(hotspot) =>
+            router.replace(`/peta?id=${encodeURIComponent(hotspot.id)}`)
+          }
           regions={regions}
           regionLevels={regionLevels}
         />

@@ -17,11 +17,25 @@ export type VisionResult = {
   response: Record<string, unknown>;
 };
 
+type MatchingResult = {
+  decision: "auto_pass" | "uncertain" | "rejected";
+  verification_score: number;
+  matched_hotspot: {
+    hotspot_id: string;
+    distance_m: number;
+    time_difference_minutes: number;
+  } | null;
+};
+
 export async function downloadAndAnalyze(
   url: string,
   contentType: string,
   reportId: string,
-): Promise<{ path: string; vision: VisionResult | null }> {
+): Promise<{
+  path: string;
+  annotatedPath: string | null;
+  vision: VisionResult | null;
+}> {
   const env = getServerEnv();
   const response = await fetch(url, {
     headers: {
@@ -33,6 +47,7 @@ export async function downloadAndAnalyze(
   const body = await response.arrayBuffer();
   const path = `reports/${reportId}/${crypto.randomUUID()}.jpg`;
   await uploadToSupabaseStorage(path, body, contentType);
+  let annotatedPath: string | null = null;
   let vision: VisionResult | null = null;
   if (env.aiServiceUrl && env.aiServiceApiKey) {
     const form = new FormData();
@@ -59,8 +74,34 @@ export async function downloadAndAnalyze(
       needsReview: response.vision?.needs_review === true,
       response: response as Record<string, unknown>,
     };
+    const annotatedForm = new FormData();
+    annotatedForm.append(
+      "file",
+      new Blob([body], { type: contentType }),
+      "report.jpg",
+    );
+    const annotatedResponse = await fetch(
+      `${env.aiServiceUrl}/v1/vision/detect/annotated`,
+      {
+        method: "POST",
+        headers: { "X-API-Key": env.aiServiceApiKey },
+        body: annotatedForm,
+      },
+    );
+    if (!annotatedResponse.ok) {
+      throw new Error(
+        `Annotated vision analysis failed (${annotatedResponse.status})`,
+      );
+    }
+    const annotatedBody = await annotatedResponse.arrayBuffer();
+    annotatedPath = `reports/${reportId}/annotated-${crypto.randomUUID()}.jpg`;
+    await uploadToSupabaseStorage(
+      annotatedPath,
+      annotatedBody,
+      "image/jpeg",
+    );
   }
-  return { path, vision };
+  return { path, annotatedPath, vision };
 }
 
 async function findRegionForPoint(latitude: number, longitude: number) {
@@ -95,6 +136,8 @@ export async function createReport(contactId: string, input: Inbound) {
       contact_id: contactId,
       region_id: region?.region_id ?? null,
       geom: { type: "Point", coordinates: [input.longitude, input.latitude] },
+      observed_at: new Date().toISOString(),
+      description: input.body.trim() || null,
       status: "received",
     }),
   });
@@ -107,6 +150,7 @@ export async function finishReport(
   session: Session,
   input: Inbound,
 ) {
+  const env = getServerEnv();
   const report = await createReport(contact.id, input);
   const mediaUrl =
     typeof session.context.mediaUrl === "string"
@@ -127,12 +171,101 @@ export async function finishReport(
         detections: analysis.vision?.response ?? null,
       }),
     });
+    if (analysis.annotatedPath) {
+      await supabaseRequest("report_media", {
+        method: "POST",
+        body: JSON.stringify({
+          report_id: report.id,
+          storage_path: analysis.annotatedPath,
+          media_type: "image",
+          detections: {
+            annotated: true,
+            source: analysis.vision?.response ?? null,
+          },
+        }),
+      });
+    }
     if (!analysis.vision || analysis.vision.labels.length === 0) {
       await supabaseRequest(`reports?id=eq.${encodeURIComponent(report.id)}`, {
         method: "PATCH",
         body: JSON.stringify({
           status: "in_review",
           verification_outcome: "uncertain",
+          updated_at: new Date().toISOString(),
+        }),
+      });
+    }
+    if (env.aiServiceUrl && env.aiInternalKey) {
+      const observedAt = new Date().toISOString();
+      const candidates = await supabaseRequest<
+        {
+          id: string;
+          latitude: number;
+          longitude: number;
+          acq_at: string;
+        }[]
+      >(
+        `hotspots?select=id,latitude,longitude,acq_at&filter_status=eq.kept&acq_at=gte.${encodeURIComponent(
+          new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        )}&acq_at=lte.${encodeURIComponent(observedAt)}&limit=5000`,
+      );
+      const scores = (analysis.vision?.response.vision as {
+        scores?: Record<string, unknown>;
+        needs_review?: boolean;
+      } | undefined)?.scores;
+      const matchingResponse = await fetch(
+        `${env.aiServiceUrl}/v1/matching/score`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Internal-Key": env.aiInternalKey,
+          },
+          body: JSON.stringify({
+            report: {
+              latitude: input.latitude,
+              longitude: input.longitude,
+              observed_at: observedAt,
+              vision: {
+                fire: typeof scores?.fire === "number" ? scores.fire : 0,
+                smoke_general:
+                  typeof scores?.smoke_general === "number"
+                    ? scores.smoke_general
+                    : 0,
+                wildfire_smoke:
+                  typeof scores?.wildfire_smoke === "number"
+                    ? scores.wildfire_smoke
+                    : 0,
+                industrial_smoke:
+                  typeof scores?.industrial_smoke === "number"
+                    ? scores.industrial_smoke
+                    : 0,
+                needs_review: analysis.vision?.needsReview ?? true,
+              },
+            },
+            hotspots: candidates.map((candidate) => ({
+              hotspot_id: candidate.id,
+              latitude: candidate.latitude,
+              longitude: candidate.longitude,
+              acq_at: candidate.acq_at,
+            })),
+          }),
+          signal: AbortSignal.timeout(30_000),
+        },
+      );
+      if (!matchingResponse.ok)
+        throw new Error(`Matching analysis failed (${matchingResponse.status})`);
+      const matching = (await matchingResponse.json()) as MatchingResult;
+      await supabaseRequest(`reports?id=eq.${encodeURIComponent(report.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: matching.decision === "auto_pass" ? "verified" : "in_review",
+          verification_outcome: matching.decision,
+          verification_score: matching.verification_score,
+          matched_hotspot_id: matching.matched_hotspot?.hotspot_id ?? null,
+          match_distance_m: matching.matched_hotspot?.distance_m ?? null,
+          match_dt_minutes:
+            matching.matched_hotspot?.time_difference_minutes ?? null,
           updated_at: new Date().toISOString(),
         }),
       });

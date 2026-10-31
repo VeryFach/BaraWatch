@@ -110,16 +110,32 @@ async function checkAiService(
   const serviceUrl = env.aiServiceUrl;
   if (!serviceUrl) return { status: "not_configured" };
   const result = await timed(() =>
-    fetch(`${serviceUrl.replace(/\/$/, "")}/health`, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(5000),
-    }),
+    Promise.all([
+      fetch(`${serviceUrl.replace(/\/$/, "")}/health`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(5000),
+      }),
+      env.aiInternalKey
+        ? fetch(`${serviceUrl.replace(/\/$/, "")}/v1/ping`, {
+            headers: { "X-Internal-Key": env.aiInternalKey },
+            cache: "no-store",
+            signal: AbortSignal.timeout(5000),
+          })
+        : Promise.resolve(null),
+    ]),
   );
-  if (result.error || !result.value?.ok) {
+  const [health, ping] = result.value ?? [];
+  if (
+    result.error ||
+    !health?.ok ||
+    (env.aiInternalKey !== undefined && !ping?.ok)
+  ) {
     return {
       status: "error",
       latencyMs: result.latencyMs,
-      detail: result.error ?? `HTTP ${result.value?.status}`,
+      detail:
+        result.error ??
+        `HTTP ${!health?.ok ? health?.status : ping?.status}`,
     };
   }
   return { status: "ok", latencyMs: result.latencyMs };

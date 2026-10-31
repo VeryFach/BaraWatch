@@ -92,6 +92,25 @@ Errors: `400` corrupt/invalid image; `401` missing/wrong key; `413` size or pixe
 
 Source: `app/api/v1/vision.py`, `app/services/vision/detector.py`, `app/services/vision/fusion.py`.
 
+## `POST /v1/vision/detect/annotated`
+
+Opsional: menjalankan pipeline YOLO Mfranzon dan Touati yang sama, lalu mengembalikan gambar beranotasi (bukan JSON). Header dan validasi upload sama dengan `/v1/vision/detect`: `X-API-Key`, multipart field `file`, JPEG/PNG, maksimal 10 MiB dan 20 juta piksel. Query `view` dapat bernilai `combined` (default), `mfranzon`, atau `touati`; query ini hanya memilih kotak yang dirender dan tidak mengubah hasil inference. Setiap kotak berasal langsung dari `model_results` pada satu pemanggilan inference; endpoint tidak membuat kotak dari skor agregat `vision`. Label hanya memuat nama class yang diformat agar mudah dibaca dan confidence deteksi asli dalam persen; nama model tetap tersedia pada hasil JSON endpoint `/v1/vision/detect`. Mfranzon memakai biru, Touati oranye. Garis dan font diskalakan terhadap gambar dengan font bawaan Pillow. JPEG dikodekan dengan quality 95 dan subsampling 0. Resolusi/aspect ratio tetap seperti input. Koordinat mengacu pada piksel gambar asli; kotak tidak valid dilewati dan kotak yang melewati batas gambar dipotong ke area gambar. Tanpa deteksi, endpoint mengembalikan gambar bersih dalam format input.
+
+Contoh (simpan hasil sebagai gambar):
+
+```sh
+curl -X POST http://127.0.0.1:8000/v1/vision/detect/annotated \
+  -H 'X-API-Key: <server-side-key>' \
+  -F 'file=@./sample.jpg;type=image/jpeg' \
+  --output ./sample-annotated.jpg
+```
+
+Pilih salah satu hasil model saja dengan menambahkan `?view=mfranzon` atau `?view=touati`; nilai bawaan adalah `combined`.
+
+**Success `200`:** bytes gambar `image/jpeg` atau `image/png` sesuai format input. Kesalahan autentikasi, validasi upload, dan model mengikuti status `/v1/vision/detect` (`400`, `401`, `413`, `415`, `503`). Gambar hanya diproses di memori dan tidak disimpan oleh endpoint.
+
+Source: `app/api/v1/vision.py`.
+
 ## `POST /v1/matching/score`
 
 Score a report against candidate satellite hotspots. Header: `X-Internal-Key`; missing configured key produces `503`, wrong/missing request key produces `401`.
@@ -195,3 +214,8 @@ Source: `app/api/v1/burn_area.py`, `app/schemas/burn_area.py`, `app/services/bur
 | `503` | Required key/model/upstream/processing unavailable, according to route |
 
 FastAPI may also produce its standard validation response body for `422`; burn-area imagery errors use a `detail` string. Do not treat the two causes as interchangeable.
+# NASA FIRMS internal adapter
+
+`POST /v1/firms/fetch-parse` is an internal-only adapter for the backend ingestion job. It requires `X-Internal-Key` and a configured server-side `FIRMS_MAP_KEY`. It accepts an allowlisted source, `[west, south, east, north]` bbox, and `days` from 1 through 5. The response contains parsed hotspot records with UTC `acq_at`, satellite, instrument, raw and normalized confidence, and FRP. It does not return the map key. The upstream response is limited to 20 MiB and the parsed batch to 20,000 records.
+
+This endpoint does not replace `POST /v1/hotspots/filter`. P0 ingestion applies the existing database `annotate_hotspots(p_run_id)` policy once, preserving each row and its `filter_status`; it does not also call the AI filter endpoint, whose standalone rules are a separate policy.
