@@ -18,9 +18,10 @@ token Twilio, `AI_INTERNAL_KEY`, atau `BARAWATCH_AI_API_KEY` dari browser.
 |---|---|---|---|
 | GET | `/api` | Publik | Health sederhana |
 | GET | `/api/health/connections` | `X-Healthcheck-Key` | Cek koneksi backend |
-| GET | `/api/public/hotspots` | Publik | Scaffold, mengembalikan data kosong |
-| GET | `/api/public/incidents` | Publik | Scaffold, mengembalikan data kosong |
-| GET | `/api/public/risk` | Publik | Scaffold, mengembalikan data kosong |
+| GET | `/api/public/hotspots` | Publik | Hotspot FIRMS tersaring dari Supabase |
+| GET | `/api/public/incidents` | Publik | Insiden aktif dari Supabase |
+| GET | `/api/public/risk` | Publik | Skor risiko terbaru dari Supabase |
+| GET | `/api/public/burn-area?incident_id=<uuid>` | Publik | Hasil estimasi dNBR tersimpan |
 | GET | `/api/public/regions` | Publik | Data wilayah dari Supabase |
 | GET | `/api/public/reports` | Publik | Data laporan tersanitasi dari Supabase |
 | POST | `/api/auth/login` | Publik | Membuat sesi Supabase dengan email/password |
@@ -33,9 +34,10 @@ token Twilio, `AI_INTERNAL_KEY`, atau `BARAWATCH_AI_API_KEY` dari browser.
 | PATCH | `/api/ops/incidents` | Petugas/Admin | Memperbarui status operasional dan membuat log |
 | POST | `/api/webhooks/whatsapp` | `X-Twilio-Signature` | Webhook inbound Twilio |
 | GET | `/api/debug/twilio` | `TWILIO_DEBUG=true` | Tes kredensial Twilio |
-| GET | `/api/cron/ingest-hotspots` | Belum diterapkan | Scaffold |
+| GET | `/api/cron/ingest-hotspots` | `Bearer CRON_SECRET` | FIRMS → DBSCAN → Supabase |
 | GET | `/api/cron/fetch-support-data` | Belum diterapkan | Scaffold |
-| GET | `/api/cron/weekly-risk` | Belum diterapkan | Scaffold |
+| GET | `/api/cron/weekly-risk` | `Bearer CRON_SECRET` | Hotspot mingguan → AI risk → `risk_scores` |
+| POST | `/api/internal/burn-area` | `Bearer CRON_SECRET` | AI dNBR → `burn_area_reports` |
 | GET | `/api/cron/flush-outbox` | Belum diterapkan | Scaffold |
 
 ### FastAPI AI service
@@ -108,17 +110,15 @@ Response:
 { "name": "BaraWatch API", "status": "ok" }
 ```
 
-### Public scaffold
+### Public data
 
-Endpoint berikut saat ini mengembalikan:
+Endpoint publik membaca view/RPC Supabase yang sudah disanitasi. Peta memanggil
+hotspot dan incident secara bersamaan, lalu mengirimkannya ke `FireMap`.
 
-```json
-{ "data": [] }
-```
-
-- `GET /api/public/hotspots`
-- `GET /api/public/incidents`
+- `GET /api/public/hotspots?limit=200`
+- `GET /api/public/incidents?limit=200`
 - `GET /api/public/risk`
+- `GET /api/public/burn-area?incident_id=<uuid>`
 
 ### `GET /api/public/regions`
 
@@ -149,25 +149,39 @@ Response:
 ### `GET /api/public/reports`
 
 Mengambil laporan warga yang sudah disanitasi untuk frontend. Data ini
-menggunakan view `public_reports`, yang menghitung `latitude` dan `longitude`
-dari kolom PostGIS `geom`; `contact_id` tidak pernah dikirim.
+menggunakan proyeksi terbatas dari view `public_reports_v`. Endpoint hanya
+meminta `id`, `incident_id`, `status`, dan `created_at`; koordinat, deskripsi,
+verifikasi, region, dan media tidak dikirim.
 
 Query opsional:
 
 - `status=received|in_review|verified|handled|rejected`
-- `region_id=<uuid>`
 - `limit=1..100`, default `50`
+- `region_id` ditolak dengan HTTP 400 karena kolom tersebut tidak tersedia di
+  proyeksi publik.
 
-Response menyertakan koordinat, status/verifikasi, deskripsi, ringkasan region
-desa beserta parent kabupatennya, dan `media` berisi signed URL gambar/video
-laporan. URL media berlaku terbatas dan dibuat server-side.
+Field privat pada bentuk respons kompatibilitas bernilai `null`, dan `media`
+serta `region` kosong/null. View `public_reports` yang berisi koordinat tepat
+dan deskripsi tidak digunakan oleh endpoint ini.
 
 ```json
 {
-  "media": [
+  "data": [
     {
-      "url": "https://project.supabase.co/storage/v1/object/sign/...",
-      "mediaType": "image"
+      "id": "report-uuid",
+      "incident_id": null,
+      "status": "in_review",
+      "created_at": "2026-11-01T10:00:00Z",
+      "matched_hotspot_id": null,
+      "latitude": null,
+      "longitude": null,
+      "observed_at": null,
+      "description": null,
+      "verification_outcome": null,
+      "verification_score": null,
+      "updated_at": null,
+      "media": [],
+      "region": null
     }
   ]
 }
@@ -223,7 +237,10 @@ Response:
 - `401`: signature tidak valid.
 
 Untuk laporan foto, web mengunduh media Twilio, menyimpannya ke Supabase
-Storage, lalu memanggil AI service. Laporan berlabel diteruskan ke MPA;
+Storage, lalu memanggil AI service untuk JSON dan gambar annotated. Gambar asli
+disimpan sebagai satu baris `report_media`, sedangkan hasil annotated disimpan
+sebagai baris media kedua dengan `detections.annotated=true`. Keduanya berada
+di bucket Storage yang sama pada prefix `reports/<report_id>/`. Laporan berlabel diteruskan ke MPA;
 laporan tanpa label masuk status `in_review` untuk evaluasi admin.
 
 Lokasi laporan diproses sebagai point PostGIS. Sistem mencari polygon
@@ -254,16 +271,16 @@ Aktif hanya jika `TWILIO_DEBUG=true`.
 
 Auth token tidak pernah dikembalikan.
 
-### Cron scaffold
+### Cron dan operasi internal
 
-Endpoint berikut mengembalikan `{ "status": "not_configured" }`:
+`ingest-hotspots` menjalankan FIRMS, policy `annotate_hotspots`, DBSCAN, dan
+reconciliation incident. `weekly-risk` mengagregasi tujuh hari hotspot per
+desa, memanggil `/v1/risk/score`, dan melakukan upsert idempoten ke
+`risk_scores`. Keduanya membutuhkan `Authorization: Bearer <CRON_SECRET>`.
 
-- `GET /api/cron/ingest-hotspots`
-- `GET /api/cron/fetch-support-data`
-- `GET /api/cron/weekly-risk`
-- `GET /api/cron/flush-outbox`
-
-Sebelum production, endpoint cron harus diberi secret auth dan idempotensi.
+`POST /api/internal/burn-area` memanggil `/v1/burn-area/estimate` dan menyimpan
+hasil indikasi ke `burn_area_reports`. Nilai ini bukan bukti hukum final dan
+hasil dengan coverage terbatas ditandai `is_uncertain=true`.
 
 ## AI service API
 

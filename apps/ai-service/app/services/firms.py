@@ -8,6 +8,7 @@ import httpx
 from app.schemas.clustering import Hotspot
 
 API_ROOT = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
+MAX_FIRMS_RESPONSE_BYTES = 20 * 1024 * 1024
 
 ALLOWED_SOURCES = {
     "VIIRS_NOAA20_NRT",
@@ -174,17 +175,17 @@ def download_firms_csv(
         datetime.strptime(start_date, "%Y-%m-%d")
         url += f"/{start_date}"
 
-    with httpx.Client(
-        timeout=40,
-        follow_redirects=False,
-    ) as client:
+    chunks = bytearray()
+    with httpx.Client(timeout=40, follow_redirects=False) as client:
+        with client.stream("GET", url) as response:
+            response.raise_for_status()
+            for chunk in response.iter_bytes():
+                chunks.extend(chunk)
+                if len(chunks) > MAX_FIRMS_RESPONSE_BYTES:
+                    raise ValueError("FIRMS response exceeds the 20 MiB limit")
 
-        response = client.get(url)
-        response.raise_for_status()
+    content = chunks.decode("utf-8-sig")
+    if "<html" in content.lower()[:300]:
+        raise ValueError("FIRMS did not return a CSV response")
 
-        if "<html" in response.text.lower()[:300]:
-            raise ValueError(
-                "FIRMS did not return a CSV response"
-            )
-
-        return response.text
+    return content
