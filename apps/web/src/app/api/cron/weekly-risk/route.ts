@@ -48,9 +48,12 @@ export async function GET(request: Request) {
       cache: "no-store",
     });
     if (!response.ok) {
-      throw new Error(`Supabase request failed (${response.status})`);
+      const detail = await response.text();
+      throw new Error(`Supabase request failed (${response.status}): ${detail.slice(0, 500)}`);
     }
-    return (await response.json()) as T;
+    if (response.status === 204) return undefined as T;
+    const body = await response.text();
+    return (body ? JSON.parse(body) : undefined) as T;
   };
 
   const weekStart = new Date();
