@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import type { PublicReport } from "@/lib/public-api";
-import { supabaseRequest } from "@/lib/supabase/admin";
+import {
+  createSupabaseStorageSignedUrl,
+  supabaseRequest,
+} from "@/lib/supabase/admin";
 import {
   createPublicReport,
   ReportRegionMismatchError,
@@ -16,6 +19,60 @@ interface PublicReportRow {
   incident_id: string | null;
   status: PublicReport["status"];
   created_at: string;
+  approx_geom: unknown;
+}
+
+/** PostgREST returns PostGIS geometry as EWKB hex unless a view casts it. */
+function approximateCoordinates(value: unknown): {
+  latitude: number;
+  longitude: number;
+} | null {
+  let latitude: number;
+  let longitude: number;
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const point = value as { type?: unknown; coordinates?: unknown };
+    if (point.type !== "Point" || !Array.isArray(point.coordinates))
+      return null;
+    [longitude, latitude] = point.coordinates as [number, number];
+  } else if (typeof value === "string") {
+    const hex = value.replace(/^\\x/i, "");
+    if (!/^(?:[0-9a-f]{2})+$/i.test(hex) || hex.length < 42) return null;
+    const bytePairs = hex.match(/.{2}/g);
+    if (!bytePairs) return null;
+    const bytes = Uint8Array.from(
+      bytePairs.map((byte) => Number.parseInt(byte, 16)),
+    );
+    const view = new DataView(bytes.buffer);
+    const littleEndian = bytes[0] === 1;
+    if (!littleEndian && bytes[0] !== 0) return null;
+    let type = view.getUint32(1, littleEndian);
+    const hasSrid = (type & 0x20000000) !== 0;
+    type &= 0x0fffffff;
+    if ((type & 0xff) !== 1) return null;
+    const sridOffset = hasSrid ? 4 : 0;
+    if (hasSrid && view.getUint32(5, littleEndian) !== 4326) return null;
+    const coordinateOffset = 5 + sridOffset;
+    if (bytes.length < coordinateOffset + 16) return null;
+    longitude = view.getFloat64(coordinateOffset, littleEndian);
+    latitude = view.getFloat64(coordinateOffset + 8, littleEndian);
+  } else {
+    return null;
+  }
+  return Number.isFinite(latitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    Number.isFinite(longitude) &&
+    longitude >= -180 &&
+    longitude <= 180
+    ? { latitude, longitude }
+    : null;
+}
+
+interface ReportMediaRow {
+  report_id: string;
+  storage_path: string;
+  media_type: "image" | "video";
+  detections: unknown;
 }
 
 export async function GET(request: Request) {
@@ -45,21 +102,52 @@ export async function GET(request: Request) {
   }
   const filter = status ? `&status=eq.${encodeURIComponent(status)}` : "";
   const reports = await supabaseRequest<PublicReportRow[]>(
-    `public_reports_v?select=id,incident_id,status,created_at&order=created_at.desc&limit=${limit}${filter}`,
+    `public_reports_v?select=id,incident_id,status,created_at,approx_geom&order=created_at.desc&limit=${limit}${filter}`,
   );
-  const data: PublicReport[] = reports.map((report) => ({
-    ...report,
-    matched_hotspot_id: null,
-    latitude: null,
-    longitude: null,
-    observed_at: null,
-    description: null,
-    verification_outcome: null,
-    verification_score: null,
-    updated_at: null,
-    media: [],
-    region: null,
-  }));
+  const imageEligibleIds = reports.map((report) => report.id);
+  const media = imageEligibleIds.length
+    ? await supabaseRequest<ReportMediaRow[]>(
+        `report_media?select=report_id,storage_path,media_type,detections&media_type=eq.image&report_id=in.(${imageEligibleIds.join(",")})&order=created_at.asc`,
+      )
+    : [];
+  const mediaByReport = new Map<string, PublicReport["media"]>();
+  for (const item of media) {
+    const metadata = item.detections;
+    if (
+      !metadata ||
+      typeof metadata !== "object" ||
+      Array.isArray(metadata) ||
+      (metadata as { annotated?: unknown }).annotated !== true
+    ) {
+      continue;
+    }
+    const reportMedia = mediaByReport.get(item.report_id) ?? [];
+    reportMedia.push({
+      url: await createSupabaseStorageSignedUrl(item.storage_path),
+      mediaType: item.media_type,
+      annotated: true,
+    });
+    mediaByReport.set(item.report_id, reportMedia);
+  }
+  const data: PublicReport[] = reports.map((report) => {
+    const coordinates = approximateCoordinates(report.approx_geom);
+    return {
+      id: report.id,
+      incident_id: report.incident_id,
+      status: report.status,
+      created_at: report.created_at,
+      matched_hotspot_id: null,
+      latitude: coordinates?.latitude ?? null,
+      longitude: coordinates?.longitude ?? null,
+      observed_at: null,
+      description: null,
+      verification_outcome: null,
+      verification_score: null,
+      updated_at: null,
+      media: mediaByReport.get(report.id) ?? [],
+      region: null,
+    };
+  });
   return NextResponse.json({ data });
 }
 
@@ -92,6 +180,7 @@ export async function POST(request: Request) {
   const photoValue = form.get("photo");
   const photo =
     photoValue instanceof File && photoValue.size > 0 ? photoValue : null;
+  const publicPhotoConsent = form.get("public_photo_consent") === "true";
 
   const invalidFields: string[] = [];
   if (!PHONE_E164.test(phone))
@@ -117,6 +206,8 @@ export async function POST(request: Request) {
   }
   if (description.length > 1000)
     invalidFields.push("Catatan maksimal 1000 karakter.");
+  if (photo && !publicPhotoConsent)
+    invalidFields.push("Setujui publikasi foto anotasi atau hapus foto.");
   if (invalidFields.length) {
     return NextResponse.json(
       { error: invalidFields.join(" "), fields: invalidFields },
@@ -160,6 +251,7 @@ export async function POST(request: Request) {
       latitude,
       longitude,
       photo: photoBytes ? { bytes: photoBytes } : null,
+      publicPhotoConsent,
     });
     return NextResponse.json(
       {

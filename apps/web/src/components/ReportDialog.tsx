@@ -38,6 +38,7 @@ export function ReportDialog({
   const [jenis, setJenis] = useState<"Api" | "Asap">("Api");
   const [catatan, setCatatan] = useState("");
   const [foto, setFoto] = useState<File | null>(null);
+  const [publicPhotoConsent, setPublicPhotoConsent] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -90,6 +91,7 @@ export function ReportDialog({
       body.set("longitude", longitude);
       body.set("type", jenis);
       body.set("description", catatan.trim());
+      body.set("public_photo_consent", String(publicPhotoConsent));
       if (foto) body.set("photo", foto);
       const response = await fetch("/api/public/reports", {
         method: "POST",
@@ -114,6 +116,7 @@ export function ReportDialog({
       setOpen(false);
       setCatatan("");
       setFoto(null);
+      setPublicPhotoConsent(false);
     } catch (error) {
       toast.error("Laporan belum terkirim", {
         description:
@@ -148,6 +151,7 @@ export function ReportDialog({
     const file = event.target.files?.[0] ?? null;
     if (!file) {
       setFoto(null);
+      setPublicPhotoConsent(false);
       return;
     }
 
@@ -297,6 +301,23 @@ export function ReportDialog({
               </span>
             )}
           </label>
+          {foto && (
+            <label className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+              <input
+                type="checkbox"
+                required
+                checked={publicPhotoConsent}
+                onChange={(event) =>
+                  setPublicPhotoConsent(event.target.checked)
+                }
+                className="mt-0.5"
+              />
+              <span>
+                Saya setuju foto hasil anotasi AI ditampilkan di peta publik
+                setelah laporan diverifikasi. Foto asli tetap privat.
+              </span>
+            </label>
+          )}
           <button
             type="submit"
             disabled={submitting || regionsLoading || !regionId}

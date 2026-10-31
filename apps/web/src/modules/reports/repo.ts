@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { getServerEnv } from "@/lib/env";
 import { supabaseRequest, uploadToSupabaseStorage } from "@/lib/supabase/admin";
 
 export class ReportRegionMismatchError extends Error {}
@@ -11,6 +12,35 @@ export interface CreatePublicReportInput {
   latitude: number;
   longitude: number;
   photo: { bytes: ArrayBuffer } | null;
+  publicPhotoConsent: boolean;
+}
+
+async function createAnnotatedPhoto(bytes: ArrayBuffer) {
+  const { aiServiceUrl, aiServiceApiKey } = getServerEnv();
+  if (!aiServiceUrl || !aiServiceApiKey) return null;
+
+  const form = new FormData();
+  form.append("file", new Blob([bytes], { type: "image/jpeg" }), "report.jpg");
+  const response = await fetch(
+    `${aiServiceUrl.replace(/\/$/, "")}/v1/vision/detect/annotated?view=combined`,
+    {
+      method: "POST",
+      headers: { "X-API-Key": aiServiceApiKey },
+      body: form,
+      signal: AbortSignal.timeout(60_000),
+    },
+  );
+  if (!response.ok) return null;
+  const contentType = response.headers.get("content-type")?.split(";")[0];
+  if (contentType !== "image/jpeg" && contentType !== "image/png") return null;
+  const annotatedBytes = await response.arrayBuffer();
+  if (
+    !annotatedBytes.byteLength ||
+    annotatedBytes.byteLength > 10 * 1024 * 1024
+  ) {
+    return null;
+  }
+  return { bytes: annotatedBytes, contentType };
 }
 
 export async function createPublicReport(input: CreatePublicReportInput) {
@@ -92,10 +122,10 @@ export async function createPublicReport(input: CreatePublicReportInput) {
   }
 
   if (input.photo) {
-    const storagePath = `reports/${report.id}/${randomUUID()}.jpg`;
+    const originalPath = `reports/${report.id}/${randomUUID()}.jpg`;
     try {
       await uploadToSupabaseStorage(
-        storagePath,
+        originalPath,
         input.photo.bytes,
         "image/jpeg",
       );
@@ -103,12 +133,45 @@ export async function createPublicReport(input: CreatePublicReportInput) {
         method: "POST",
         body: JSON.stringify({
           report_id: report.id,
-          storage_path: storagePath,
+          storage_path: originalPath,
           media_type: "image",
         }),
       });
     } catch {
-      warnings.push("Laporan tersimpan, tetapi foto gagal diunggah.");
+      warnings.push("Laporan tersimpan, tetapi foto asli gagal diunggah.");
+    }
+
+    if (input.publicPhotoConsent) {
+      try {
+        const annotated = await createAnnotatedPhoto(input.photo.bytes);
+        if (!annotated) {
+          warnings.push(
+            "Laporan tersimpan, tetapi anotasi YOLO belum tersedia; foto tidak ditampilkan di peta publik.",
+          );
+        } else {
+          const extension =
+            annotated.contentType === "image/png" ? "png" : "jpg";
+          const annotatedPath = `reports/${report.id}/annotated-${randomUUID()}.${extension}`;
+          await uploadToSupabaseStorage(
+            annotatedPath,
+            annotated.bytes,
+            annotated.contentType,
+          );
+          await supabaseRequest("report_media", {
+            method: "POST",
+            body: JSON.stringify({
+              report_id: report.id,
+              storage_path: annotatedPath,
+              media_type: "image",
+              detections: { annotated: true, public_consent: true },
+            }),
+          });
+        }
+      } catch {
+        warnings.push(
+          "Laporan tersimpan, tetapi anotasi YOLO gagal; foto tidak ditampilkan di peta publik.",
+        );
+      }
     }
   }
 
