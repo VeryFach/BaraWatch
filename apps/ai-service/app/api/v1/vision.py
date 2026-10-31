@@ -89,6 +89,8 @@ async def detect_image(
 
             source.load()
 
+            image_width, image_height = source.size
+
             if (
                 source.width * source.height
                 > MAX_IMAGE_PIXELS
@@ -128,6 +130,10 @@ async def detect_image(
         "status": "success",
         "filename": file.filename,
         "device": predictions["device"],
+        "image_size": {
+            "width": image_width,
+            "height": image_height,
+        },
         "vision": fusion,
         "model_results": predictions["models"],
     }

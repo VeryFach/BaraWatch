@@ -5,6 +5,7 @@ import uuid
 from fastapi import FastAPI, Request
 
 from app.api.health import router as health_router
+from app.api.v1.burn_area import router as burn_area_router
 from app.api.v1.cluster import router as cluster_router
 from app.api.v1.hotspot_filter import router as hotspot_filter_router
 from app.api.v1.matching import router as matching_router
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(matching_router)
     app.include_router(hotspot_filter_router)
     app.include_router(risk_router)
+    app.include_router(burn_area_router)
 
     return app
 

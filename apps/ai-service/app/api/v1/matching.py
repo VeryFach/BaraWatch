@@ -1,8 +1,8 @@
-import os
 import secrets
 
 from fastapi import APIRouter, Header, HTTPException, status
 
+from app.core.config import Settings
 from app.schemas.matching import (
     MatchingRequest,
     MatchingResponse,
@@ -20,7 +20,7 @@ router = APIRouter(
 def verify_internal_key(
     x_internal_key: str | None,
 ) -> None:
-    expected_key = os.getenv("AI_INTERNAL_KEY")
+    expected_key = Settings().ai_internal_key
 
     if not expected_key:
         raise HTTPException(

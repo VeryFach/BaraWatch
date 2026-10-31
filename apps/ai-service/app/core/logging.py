@@ -23,6 +23,23 @@ class JsonFormatter(logging.Formatter):
             "path",
             "status_code",
             "duration_ms",
+            "scene_id",
+            "reason",
+            "b8_valid_pixels",
+            "b12_valid_pixels",
+            "scl_valid_pixels",
+            "nbr_valid_pixels",
+            "pre_scene_ids",
+            "post_scene_ids",
+            "max_cloud_percent",
+            "max_scenes_per_period",
+            "pre_scenes_usable",
+            "post_scenes_usable",
+            "valid_pre_pixels",
+            "valid_post_pixels",
+            "overlapping_valid_pixels",
+            "indicated_pixels",
+            "valid_coverage_percent",
         ]
 
         for field in fields:
