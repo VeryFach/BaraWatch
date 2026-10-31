@@ -187,8 +187,8 @@ export function ReportDialog({
                 className={cn(
                   "rounded-xl border py-3 text-sm font-medium transition",
                   jenis === j
-                    ? "border-primary bg-accent text-accent-foreground"
-                    : "hover:bg-muted",
+                    ? "border-primary bg-accent text-black"
+                    : "text-black hover:bg-muted",
                 )}
               >
                 {j === "Api" ? "🔥 Api" : "💨 Asap"}
@@ -202,6 +202,7 @@ export function ReportDialog({
               searchPlaceholder="Cari desa…"
               value={regionId}
               onChange={setRegionId}
+              triggerClassName="text-black"
               options={regions.map((region) => ({
                 value: region.id,
                 label: region.name,
@@ -223,7 +224,7 @@ export function ReportDialog({
               onChange={(event) => setPhone(event.target.value)}
               placeholder="+6281234567890"
               pattern="[+][1-9][0-9]{7,14}"
-              className="mt-1 h-10 w-full rounded-xl border bg-background px-3"
+              className="mt-1 h-10 w-full rounded-xl border bg-background px-3 text-black placeholder:text-gray-500"
             />
             <span className="mt-1 block text-xs text-muted-foreground">
               Nomor dipakai untuk mengaitkan laporan dengan kontak warga dan
@@ -254,7 +255,7 @@ export function ReportDialog({
                   max="90"
                   value={latitude}
                   onChange={(event) => setLatitude(event.target.value)}
-                  className="mt-1 h-10 w-full rounded-xl border bg-background px-3"
+                  className="mt-1 h-10 w-full rounded-xl border bg-background px-3 text-black placeholder:text-gray-500"
                 />
               </label>
               <label>
@@ -267,7 +268,7 @@ export function ReportDialog({
                   max="180"
                   value={longitude}
                   onChange={(event) => setLongitude(event.target.value)}
-                  className="mt-1 h-10 w-full rounded-xl border bg-background px-3"
+                  className="mt-1 h-10 w-full rounded-xl border bg-background px-3 text-black placeholder:text-gray-500"
                 />
               </label>
             </div>
@@ -282,7 +283,7 @@ export function ReportDialog({
               onChange={(e) => setCatatan(e.target.value)}
               rows={3}
               placeholder="Contoh: asap tebal di belakang sekolah"
-              className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5"
+              className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-black placeholder:text-gray-500"
             />
           </label>
           <label className="block rounded-xl border border-dashed p-4 text-sm">
@@ -293,7 +294,7 @@ export function ReportDialog({
               type="file"
               accept=".jpg,.jpeg,image/jpeg"
               onChange={handleFotoChange}
-              className="mt-3 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-primary-foreground"
+              className="mt-3 block w-full text-sm text-black file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-black"
             />
             {foto && (
               <span className="mt-2 block truncate text-xs text-muted-foreground">

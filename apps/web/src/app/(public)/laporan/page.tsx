@@ -85,13 +85,13 @@ export default function ReportsPage() {
               setFilters((p) => ({ ...p, query: e.target.value }))
             }
             placeholder="Cari laporan, desa, atau ID"
-            className="h-10 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring/30"
+            className="h-10 w-full rounded-md border bg-background pl-9 pr-3 text-sm text-black outline-none placeholder:text-gray-500 focus:ring-2 focus:ring-ring/30"
           />
         </div>
         <select
           value={filters.jenis}
           onChange={(e) => setFilters((p) => ({ ...p, jenis: e.target.value }))}
-          className="h-10 rounded-md border bg-background px-3 text-sm"
+          className="h-10 rounded-md border bg-background px-3 text-sm text-black"
         >
           <option value="semua">Semua jenis</option>
           <option value="laporan">Laporan warga</option>
@@ -107,7 +107,7 @@ export default function ReportsPage() {
               desa: "all",
             }))
           }
-          className="h-10 rounded-md border bg-background px-3 text-sm"
+          className="h-10 rounded-md border bg-background px-3 text-sm text-black"
         >
           <option value="all">Semua wilayah</option>
           {districts.map((d) => (
@@ -118,6 +118,7 @@ export default function ReportsPage() {
         </select>
         <select
           value={filters.kecamatan}
+          disabled={filters.kabupaten === "all" || kecamatans.length === 0}
           onChange={(e) =>
             setFilters((p) => ({
               ...p,
@@ -125,7 +126,7 @@ export default function ReportsPage() {
               desa: "all",
             }))
           }
-          className="h-10 rounded-md border bg-background px-3 text-sm"
+          className="h-10 rounded-md border bg-background px-3 text-sm text-black"
         >
           <option value="all">Semua kecamatan</option>
           {kecamatans.map((value) => (
@@ -136,8 +137,9 @@ export default function ReportsPage() {
         </select>
         <select
           value={filters.desa}
+          disabled={filters.kecamatan === "all" || villages.length === 0}
           onChange={(e) => setFilters((p) => ({ ...p, desa: e.target.value }))}
-          className="h-10 rounded-md border bg-background px-3 text-sm"
+          className="h-10 rounded-md border bg-background px-3 text-sm text-black"
         >
           <option value="all">Semua desa</option>
           {villages.map((value) => (
@@ -151,7 +153,7 @@ export default function ReportsPage() {
           onChange={(e) =>
             setFilters((p) => ({ ...p, urutan: e.target.value }))
           }
-          className="h-10 rounded-md border bg-background px-3 text-sm"
+          className="h-10 rounded-md border bg-background px-3 text-sm text-black"
         >
           <option value="terbaru">Terbaru</option>
           <option value="terlama">Terlama</option>
