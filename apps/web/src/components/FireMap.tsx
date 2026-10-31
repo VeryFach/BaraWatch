@@ -1,8 +1,23 @@
-import { useEffect } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip, Polygon, useMap } from "react-leaflet";
+import { useEffect, useState } from "react";
+import {
+  CircleMarker,
+  MapContainer,
+  Polygon,
+  Popup,
+  TileLayer,
+  Tooltip,
+  useMap,
+} from "react-leaflet";
 import { useApp } from "@/components/AppState";
 import "leaflet/dist/leaflet.css";
-import { desaList, hotspots, riskLabel, riskVar, statusLabel, type Hotspot } from "@/lib/dummy-data";
+import {
+  desaList,
+  type Hotspot,
+  hotspots,
+  riskLabel,
+  riskVar,
+  statusLabel,
+} from "@/lib/dummy-data";
 
 interface Props {
   showRisk: boolean;
@@ -40,9 +55,15 @@ const konsesi: { nama: string; pts: [number, number][] }[] = [
 const css = (v: string) =>
   typeof window === "undefined"
     ? v
-    : getComputedStyle(document.documentElement).getPropertyValue(v.slice(4, -1)).trim() || v;
+    : getComputedStyle(document.documentElement)
+        .getPropertyValue(v.slice(4, -1))
+        .trim() || v;
 
-function FocusHotspot({ selectedId }: { selectedId?: string | null | undefined }) {
+function FocusHotspot({
+  selectedId,
+}: {
+  selectedId?: string | null | undefined;
+}) {
   const map = useMap();
   useEffect(() => {
     const h = hotspots.find((row) => row.id === selectedId);
@@ -66,9 +87,14 @@ export default function FireMap({
   villageNames,
 }: Props) {
   const { statusOf } = useApp();
+  const [mapReady, setMapReady] = useState(false);
   const list = hotspots
     .map((h) => ({ ...h, status: statusOf(h.id) }))
-    .filter((h) => (hotspotIds ? hotspotIds.includes(h.id) : !(hideFalse && h.status === "bukan-api")));
+    .filter((h) =>
+      hotspotIds
+        ? hotspotIds.includes(h.id)
+        : !(hideFalse && h.status === "bukan-api"),
+    );
   return (
     <MapContainer
       center={[-2.45, 114.1]}
@@ -76,68 +102,83 @@ export default function FireMap({
       scrollWheelZoom={!compact}
       zoomControl={!compact}
       className="h-full w-full z-0"
+      whenReady={() => setMapReady(true)}
     >
-      <FocusHotspot selectedId={selectedId} />
-      <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
-      {showKonsesi &&
-        konsesi.map((k) => (
-          <Polygon
-            key={k.nama}
-            positions={k.pts}
-            pathOptions={{ color: css("var(--forest)"), dashArray: "6 6", weight: 2, fillOpacity: 0.08 }}
-          >
-            <Tooltip sticky>{k.nama}</Tooltip>
-          </Polygon>
-        ))}
-      {showRisk &&
-        desaList
-          .filter((d) => !villageNames || villageNames.includes(d.nama))
-          .map((d) => (
-            <CircleMarker
-              key={d.nama}
-              center={[d.lat, d.lng]}
-              radius={compact ? 16 : 26}
-              pathOptions={{
-                color: css(riskVar[d.risk]),
-                fillColor: css(riskVar[d.risk]),
-                fillOpacity: 0.22,
-                weight: 1,
-              }}
-            >
-              <Tooltip>
-                <b>{d.nama}</b> · Risiko {riskLabel[d.risk]}
-                <br />
-                {d.alasan}
-              </Tooltip>
-            </CircleMarker>
-          ))}
-      {showHotspots &&
-        list.map((h) => {
-          const off = h.status === "bukan-api" || h.status === "selesai";
-          const sel = selectedId === h.id;
-          return (
-            <CircleMarker
-              key={h.id}
-              center={[h.lat, h.lng]}
-              radius={sel ? 11 : 7}
-              eventHandlers={{ click: () => onSelect?.(h) }}
-              pathOptions={{
-                color: css("var(--map-marker-stroke)"),
-                weight: 2,
-                fillColor: off ? css("var(--map-marker-inactive)") : css("var(--risk-extreme)"),
-                fillOpacity: 1,
-              }}
-            >
-              {!onSelect && (
-                <Popup>
-                  <b>{h.desa}</b> — {statusLabel[h.status]}
-                  <br />
-                  Confidence {h.confidence}% · {h.waktu}
-                </Popup>
-              )}
-            </CircleMarker>
-          );
-        })}
+      {mapReady && (
+        <>
+          <FocusHotspot selectedId={selectedId} />
+          <TileLayer
+            attribution="&copy; OpenStreetMap contributors"
+            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          {showKonsesi &&
+            konsesi.map((k) => (
+              <Polygon
+                key={k.nama}
+                positions={k.pts}
+                pathOptions={{
+                  color: css("var(--forest)"),
+                  dashArray: "6 6",
+                  weight: 2,
+                  fillOpacity: 0.08,
+                }}
+              >
+                <Tooltip sticky>{k.nama}</Tooltip>
+              </Polygon>
+            ))}
+          {showRisk &&
+            desaList
+              .filter((d) => !villageNames || villageNames.includes(d.nama))
+              .map((d) => (
+                <CircleMarker
+                  key={d.nama}
+                  center={[d.lat, d.lng]}
+                  radius={compact ? 16 : 26}
+                  pathOptions={{
+                    color: css(riskVar[d.risk]),
+                    fillColor: css(riskVar[d.risk]),
+                    fillOpacity: 0.22,
+                    weight: 1,
+                  }}
+                >
+                  <Tooltip>
+                    <b>{d.nama}</b> · Risiko {riskLabel[d.risk]}
+                    <br />
+                    {d.alasan}
+                  </Tooltip>
+                </CircleMarker>
+              ))}
+          {showHotspots &&
+            list.map((h) => {
+              const off = h.status === "bukan-api" || h.status === "selesai";
+              const sel = selectedId === h.id;
+              return (
+                <CircleMarker
+                  key={h.id}
+                  center={[h.lat, h.lng]}
+                  radius={sel ? 11 : 7}
+                  eventHandlers={{ click: () => onSelect?.(h) }}
+                  pathOptions={{
+                    color: css("var(--map-marker-stroke)"),
+                    weight: 2,
+                    fillColor: off
+                      ? css("var(--map-marker-inactive)")
+                      : css("var(--risk-extreme)"),
+                    fillOpacity: 1,
+                  }}
+                >
+                  {!onSelect && (
+                    <Popup>
+                      <b>{h.desa}</b> — {statusLabel[h.status]}
+                      <br />
+                      Confidence {h.confidence}% · {h.waktu}
+                    </Popup>
+                  )}
+                </CircleMarker>
+              );
+            })}
+        </>
+      )}
     </MapContainer>
   );
 }

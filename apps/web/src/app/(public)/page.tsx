@@ -1,8 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-
 import {
   AlertTriangle,
   ArrowRight,
@@ -12,6 +9,8 @@ import {
   Megaphone,
   Wind,
 } from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
 
 import {
   Area,
@@ -22,13 +21,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-
-import { ClientMap } from "@/components/ClientMap";
-import { StatusBadge, RiskDot } from "@/components/StatusBadge";
-import { ReportDialog } from "@/components/ReportDialog";
-import { SearchSelect } from "@/components/SearchSelect";
 import { useApp } from "@/components/AppState";
-
+import { ClientMap } from "@/components/ClientMap";
+import { ReportDialog } from "@/components/ReportDialog";
+import { RoleDashboard } from "@/components/RoleDashboard";
+import { SearchSelect } from "@/components/SearchSelect";
+import { RiskDot, StatusBadge } from "@/components/StatusBadge";
 import {
   desaList,
   hotspots,
@@ -37,6 +35,7 @@ import {
   trend7d,
   weather,
 } from "@/lib/dummy-data";
+import { dashboardView } from "@/lib/roles";
 
 import { cn } from "@/lib/utils";
 
@@ -58,27 +57,21 @@ function Stat({
   return (
     <div className={cn(card, "p-6")}>
       <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">
-          {label}
-        </span>
+        <span className="text-sm text-muted-foreground">{label}</span>
 
         <span
           className={cn(
             "flex h-9 w-9 items-center justify-center rounded-xl",
-            tone
+            tone,
           )}
         >
           <Icon className="h-4 w-4" />
         </span>
       </div>
 
-      <div className="mt-4 text-3xl font-semibold tracking-tight">
-        {value}
-      </div>
+      <div className="mt-4 text-3xl font-semibold tracking-tight">{value}</div>
 
-      <div className="mt-1 text-sm text-muted-foreground">
-        {hint}
-      </div>
+      <div className="mt-1 text-sm text-muted-foreground">{hint}</div>
     </div>
   );
 }
@@ -97,11 +90,7 @@ function SectionHead({
       <div>
         <h2 className="font-semibold">{title}</h2>
 
-        {sub && (
-          <p className="text-sm text-muted-foreground">
-            {sub}
-          </p>
-        )}
+        {sub && <p className="text-sm text-muted-foreground">{sub}</p>}
       </div>
 
       {action}
@@ -115,25 +104,19 @@ function WeatherRow() {
       <div>
         <Droplets className="mb-1 h-4 w-4 text-muted-foreground" />
         {weather.kelembapan}%
-        <div className="text-xs text-muted-foreground">
-          Kelembapan
-        </div>
+        <div className="text-xs text-muted-foreground">Kelembapan</div>
       </div>
 
       <div>
         <CloudSun className="mb-1 h-4 w-4 text-muted-foreground" />
         {weather.suhu}°C
-        <div className="text-xs text-muted-foreground">
-          Suhu
-        </div>
+        <div className="text-xs text-muted-foreground">Suhu</div>
       </div>
 
       <div>
         <Wind className="mb-1 h-4 w-4 text-muted-foreground" />
         14 km/j
-        <div className="text-xs text-muted-foreground">
-          Angin tenggara
-        </div>
+        <div className="text-xs text-muted-foreground">Angin tenggara</div>
       </div>
     </div>
   );
@@ -157,12 +140,7 @@ function MapPreview() {
       />
 
       <div className="h-80">
-        <ClientMap
-          showRisk
-          showHotspots
-          hideFalse
-          compact
-        />
+        <ClientMap showRisk showHotspots hideFalse compact />
       </div>
     </div>
   );
@@ -170,16 +148,12 @@ function MapPreview() {
 
 function RawanCard() {
   const rawan = desaList.filter(
-    (desa) =>
-      desa.risk === "ekstrem" ||
-      desa.risk === "tinggi"
+    (desa) => desa.risk === "ekstrem" || desa.risk === "tinggi",
   );
 
   return (
     <div className={cn(card, "p-6")}>
-      <h2 className="font-semibold">
-        Desa paling rawan
-      </h2>
+      <h2 className="font-semibold">Desa paling rawan</h2>
 
       <p className="text-sm text-muted-foreground">
         Prediksi risiko minggu ini
@@ -192,13 +166,9 @@ function RawanCard() {
             className="flex items-start justify-between gap-4"
           >
             <div>
-              <div className="font-medium">
-                {desa.nama}
-              </div>
+              <div className="font-medium">{desa.nama}</div>
 
-              <div className="text-sm text-muted-foreground">
-                {desa.alasan}
-              </div>
+              <div className="text-sm text-muted-foreground">{desa.alasan}</div>
             </div>
 
             <RiskDot risk={desa.risk} />
@@ -212,9 +182,7 @@ function RawanCard() {
 function TrendCard() {
   return (
     <div className={cn(card, "p-6")}>
-      <h2 className="font-semibold">
-        Tren 7 hari
-      </h2>
+      <h2 className="font-semibold">Tren 7 hari</h2>
 
       <p className="text-sm text-muted-foreground">
         Hotspot mentah vs alert setelah disaring
@@ -222,14 +190,8 @@ function TrendCard() {
 
       <div className="mt-6 h-56">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
-            data={trend7d}
-            margin={{ left: -20, right: 4 }}
-          >
-            <CartesianGrid
-              vertical={false}
-              stroke="var(--border)"
-            />
+          <AreaChart data={trend7d} margin={{ left: -20, right: 4 }}>
+            <CartesianGrid vertical={false} stroke="var(--border)" />
 
             <XAxis
               dataKey="hari"
@@ -318,13 +280,10 @@ function AlertList() {
                 href={`/peta?id=${encodeURIComponent(hotspot.id)}`}
                 className="min-w-0 flex-1 hover:underline"
               >
-                <div className="truncate font-medium">
-                  {hotspot.desa}
-                </div>
+                <div className="truncate font-medium">{hotspot.desa}</div>
 
                 <div className="text-sm text-muted-foreground">
-                  {hotspot.kabupaten} ·{" "}
-                  {hotspot.gambut ? "Gambut" : "Mineral"}
+                  {hotspot.kabupaten} · {hotspot.gambut ? "Gambut" : "Mineral"}
                 </div>
               </Link>
 
@@ -358,7 +317,7 @@ function LaporanBadge({
     <span
       className={cn(
         "rounded-full px-2.5 py-0.5 text-xs font-medium",
-        styles[status]
+        styles[status],
       )}
     >
       {labels[status]}
@@ -366,27 +325,33 @@ function LaporanBadge({
   );
 }
 
-export default function PublicDashboard() {
+export default function DashboardPage() {
+  const { role } = useApp();
+  const view = dashboardView(role);
+
+  if (view !== "publik") {
+    return <RoleDashboard view={view} />;
+  }
+
+  return <PublicDashboard />;
+}
+
+function PublicDashboard() {
   const { laporan, statusOf } = useApp();
 
   const [desa, setDesa] = useState("Kalampangan");
 
   const selectedDesa =
-    desaList.find((item) => item.nama === desa) ??
-    desaList[0];
+    desaList.find((item) => item.nama === desa) ?? desaList[0];
 
   if (!selectedDesa) return null;
 
   const aktif = hotspots.filter((hotspot) =>
-    ["baru", "diverifikasi", "ditangani"].includes(
-      statusOf(hotspot.id)
-    )
+    ["baru", "diverifikasi", "ditangani"].includes(statusOf(hotspot.id)),
   ).length;
 
   const rawan = desaList.filter(
-    (item) =>
-      item.risk === "tinggi" ||
-      item.risk === "ekstrem"
+    (item) => item.risk === "tinggi" || item.risk === "ekstrem",
   ).length;
 
   return (
@@ -394,9 +359,7 @@ export default function PublicDashboard() {
       {/* PAGE HEADER */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm text-muted-foreground">
-            Kalimantan Tengah
-          </p>
+          <p className="text-sm text-muted-foreground">Kalimantan Tengah</p>
 
           <h1 className="mt-1 text-3xl font-semibold tracking-tight">
             Pantauan karhutla
@@ -408,8 +371,8 @@ export default function PublicDashboard() {
           className="flex items-center gap-2 rounded-full bg-destructive/10 px-5 py-2.5 text-sm font-medium text-destructive transition hover:bg-destructive/15"
         >
           <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />
-          {hotspots.filter((h) => statusOf(h.id) === "baru").length}{" "}
-          titik api baru
+          {hotspots.filter((h) => statusOf(h.id) === "baru").length} titik api
+          baru
           <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
@@ -444,12 +407,9 @@ export default function PublicDashboard() {
       {/* VILLAGE RISK + REPORT */}
       <section className="grid gap-6 lg:grid-cols-5">
         <div className={cn(card, "p-8 lg:col-span-3")}>
-          <label
-            id="desa-label"
-            className="text-sm text-muted-foreground"
-          >
+          <div id="desa-label" className="text-sm text-muted-foreground">
             Cek risiko desa
-          </label>
+          </div>
 
           <SearchSelect
             labelledBy="desa-label"
@@ -503,17 +463,17 @@ export default function PublicDashboard() {
           <div className={cn(card, "bg-accent p-6")}>
             <Megaphone className="h-6 w-6 text-accent-foreground" />
 
-            <h2 className="mt-3 font-semibold">
-              Lihat api atau asap?
-            </h2>
+            <h2 className="mt-3 font-semibold">Lihat api atau asap?</h2>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              Laporkan sekarang. Tim desa dan petugas akan
-              menindaklanjuti.
+              Laporkan sekarang. Tim desa dan petugas akan menindaklanjuti.
             </p>
 
             <ReportDialog defaultDesa={desa}>
-              <button className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90">
+              <button
+                type="button"
+                className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90"
+              >
                 <Megaphone className="h-4 w-4" />
                 Laporkan sekarang
               </button>
@@ -521,9 +481,7 @@ export default function PublicDashboard() {
           </div>
 
           <div className={cn(card, "p-6")}>
-            <h2 className="font-semibold">
-              Yang perlu dilakukan
-            </h2>
+            <h2 className="font-semibold">Yang perlu dilakukan</h2>
 
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
               <li>• Jangan membuka lahan dengan cara membakar.</li>
@@ -571,10 +529,7 @@ export default function PublicDashboard() {
 
         <ul className="divide-y">
           {laporan.slice(0, 3).map((item) => (
-            <li
-              key={item.id}
-              className="flex items-center gap-4 px-6 py-4"
-            >
+            <li key={item.id} className="flex items-center gap-4 px-6 py-4">
               <span className="w-12 text-sm text-muted-foreground">
                 {item.waktu}
               </span>
