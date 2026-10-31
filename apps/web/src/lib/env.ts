@@ -13,6 +13,8 @@ export function getServerEnv() {
     twilioAccountSid: required("TWILIO_ACCOUNT_SID"),
     twilioAuthToken: required("TWILIO_AUTH_TOKEN"),
     twilioWhatsappFrom: required("TWILIO_WHATSAPP_FROM"),
+    twilioWebhookUrl: process.env.TWILIO_WEBHOOK_URL,
+    twilioDebug: process.env.TWILIO_DEBUG === "true",
     twilioAlertTemplateSid: process.env.TWILIO_ALERT_TEMPLATE_SID,
     twilioWebhookSecret: process.env.TWILIO_WEBHOOK_SECRET,
     aiServiceUrl: process.env.AI_SERVICE_URL,

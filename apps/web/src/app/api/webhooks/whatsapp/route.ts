@@ -1,9 +1,12 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
+import twilio from "twilio";
 import { getServerEnv } from "@/lib/env";
 import { supabaseRequest } from "@/lib/supabase/admin";
 import { routeInbound } from "@/modules/whatsapp/router";
-import { twilioProvider } from "@/modules/whatsapp/twilio";
+import {
+  twilioProvider,
+  verifyTwilioCredentials,
+} from "@/modules/whatsapp/twilio";
 
 function validTwilioSignature(
   url: string,
@@ -12,16 +15,12 @@ function validTwilioSignature(
 ): boolean {
   const secret = getServerEnv().twilioAuthToken;
   if (!signature) return false;
-  const payload =
-    url +
-    [...params.keys()]
-      .sort()
-      .map((key) => key + params.get(key))
-      .join("");
-  const expected = createHmac("sha1", secret).update(payload).digest("base64");
-  const left = Buffer.from(expected);
-  const right = Buffer.from(signature);
-  return left.length === right.length && timingSafeEqual(left, right);
+  return twilio.validateRequest(
+    secret,
+    signature,
+    url,
+    Object.fromEntries(params.entries()),
+  );
 }
 
 function numberFrom(value: string | null): number | undefined {
@@ -33,13 +32,40 @@ function numberFrom(value: string | null): number | undefined {
 export async function POST(request: Request) {
   const body = await request.text();
   const params = new URLSearchParams(body);
-  if (
-    !validTwilioSignature(
-      request.url,
-      params,
-      request.headers.get("x-twilio-signature"),
-    )
-  ) {
+  const env = getServerEnv();
+  if (env.twilioDebug) {
+    try {
+      await verifyTwilioCredentials();
+    } catch {
+      console.error(
+        "[WhatsApp webhook] Twilio credential verification failed; continuing to signature validation",
+      );
+    }
+  }
+  const signature = request.headers.get("x-twilio-signature");
+  const signatureUrl = env.twilioWebhookUrl ?? request.url;
+  const publicSignatureValid = validTwilioSignature(
+    signatureUrl,
+    params,
+    signature,
+  );
+  const localSignatureValid = validTwilioSignature(
+    request.url,
+    params,
+    signature,
+  );
+  console.log("[WhatsApp webhook] request received", {
+    requestUrl: request.url,
+    signatureUrl,
+    signaturePresent: Boolean(signature),
+    parameterNames: [...params.keys()].sort(),
+    publicSignatureValid,
+    localSignatureValid,
+  });
+  if (!publicSignatureValid) {
+    console.error("[WhatsApp webhook] rejected: invalid Twilio signature", {
+      hint: "requestUrl localhost is expected behind ngrok; TWILIO_WEBHOOK_URL must exactly match the public URL saved in Twilio Sandbox",
+    });
     return NextResponse.json(
       { error: "Invalid Twilio signature" },
       { status: 401 },
@@ -47,6 +73,12 @@ export async function POST(request: Request) {
   }
   const from = params.get("From")?.replace(/^whatsapp:/, "");
   const messageSid = params.get("MessageSid");
+  console.log("[WhatsApp webhook] message parsed", {
+    messageSidPresent: Boolean(messageSid),
+    fromPresent: Boolean(from),
+    bodyPresent: Boolean(params.get("Body")),
+    mediaCount: params.get("NumMedia") ?? "0",
+  });
   if (!from || !messageSid)
     return NextResponse.json(
       { error: "Missing Twilio message fields" },
