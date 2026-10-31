@@ -1,5 +1,7 @@
 # Test results
 
+> **Historical snapshot.** The 18-test result and Docker build/smoke results below belong to an earlier audit environment. The current documentation-time test run is 74 passed; see [Testing](TESTING.md). Docker was unavailable in the latest audit. Historical results are retained and are not current verification.
+
 Environment: macOS host, repository virtualenv, Python 3.11. The commands below
 were executed during this audit.
 

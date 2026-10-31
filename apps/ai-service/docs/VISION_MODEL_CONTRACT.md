@@ -26,15 +26,17 @@ The target labels are `fire`, `wildfire_smoke`, and `industrial_smoke`.
 Fire and smoke labels may coexist. Both smoke-origin classes produce
 `smoke_type: ambiguous` and `needs_review: true`. General smoke alone produces
 `smoke_unknown`; no detection produces `not_detected`. Thresholds are
-provisional environment-configurable operating points, not calibrated
-probabilities.
+provisional operating points, not calibrated probabilities. Per-model object
+confidence and IoU thresholds are environment-configurable; the fusion label
+thresholds are fixed at 0.25 in `services/vision/fusion.py`.
 
 ## Response shape
 
-`POST /v1/vision/detect` returns `status`, `filename`, `device`, `vision`, and
-`model_results`. The `vision` object contains `labels`, `smoke_type`, `scores`,
+`POST /v1/vision/detect` returns `status`, `filename`, `device`, `image_size`,
+`vision`, and `model_results`. The `image_size` object contains decoded image
+width and height. The `vision` object contains `labels`, `smoke_type`, `scores`,
 and `needs_review`; `model_results` retains each model's native class,
-confidence, and `[x1, y1, x2, y2]` box.
+confidence, and `[x1, y1, x2, y2]` pixel-coordinate box.
 
 Image-only classification is tentative. It must not be presented as officially
 verified smoke origin without contextual evidence.

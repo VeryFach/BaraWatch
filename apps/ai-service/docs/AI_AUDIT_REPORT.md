@@ -1,5 +1,7 @@
 # BaraWatch AI Audit Report
 
+> **Historical audit snapshot.** This report describes an earlier service state and repairs. Its four-route inventory/readiness wording is no longer current. For current endpoints, tests, and known gaps, see the [service README](../README.md), [Testing](TESTING.md), and [Limitations](LIMITATIONS.md). Historical repair notes below are retained as project history, not as a fresh audit.
+
 ## Executive summary
 
 The FastAPI service is operational for health, internal ping, clustering, and
