@@ -1,4 +1,10 @@
-import { type ChangeEvent, type ReactNode, useEffect, useState } from "react";
+import {
+  type ChangeEvent,
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { useApp } from "@/components/AppState";
 import { SearchSelect } from "@/components/SearchSelect";
@@ -20,11 +26,15 @@ export function ReportDialog({
   children: ReactNode;
   defaultDesa?: string;
 }) {
-  const { addLaporan } = useApp();
+  const { refreshReports } = useApp();
   const [open, setOpen] = useState(false);
-  const [desa, setDesa] = useState(defaultDesa ?? "");
+  const [regionId, setRegionId] = useState("");
+  const [phone, setPhone] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
   const [regions, setRegions] = useState<PublicRegion[]>([]);
   const [regionsLoading, setRegionsLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [jenis, setJenis] = useState<"Api" | "Asap">("Api");
   const [catatan, setCatatan] = useState("");
   const [foto, setFoto] = useState<File | null>(null);
@@ -40,7 +50,11 @@ export function ReportDialog({
         if (!active) return;
         const villages = data.filter((region) => region.level === "desa");
         setRegions(villages);
-        if (!defaultDesa && villages[0]) setDesa(villages[0].name);
+        if (defaultDesa) {
+          setRegionId(
+            villages.find((region) => region.name === defaultDesa)?.id ?? "",
+          );
+        }
       })
       .catch(() => {
         if (active) setRegions([]);
@@ -53,30 +67,81 @@ export function ReportDialog({
     };
   }, [defaultDesa]);
 
-  const submit = () => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (foto && !isJpegFile(foto)) {
       toast.error("Format foto tidak didukung", {
         description: "Gunakan file JPG atau JPEG.",
       });
       return;
     }
+    if (foto && foto.size > 5 * 1024 * 1024) {
+      toast.error("Foto terlalu besar", {
+        description: "Ukuran maksimum foto 5 MB.",
+      });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const body = new FormData();
+      body.set("phone", phone.trim());
+      body.set("region_id", regionId);
+      body.set("latitude", latitude);
+      body.set("longitude", longitude);
+      body.set("type", jenis);
+      body.set("description", catatan.trim());
+      if (foto) body.set("photo", foto);
+      const response = await fetch("/api/public/reports", {
+        method: "POST",
+        body,
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        warnings?: string[];
+      };
+      if (!response.ok)
+        throw new Error(result.error ?? "Laporan gagal dikirim.");
+      await refreshReports();
+      if (result.warnings?.length) {
+        toast.warning("Laporan tersimpan sebagian", {
+          description: result.warnings.join(" "),
+        });
+      } else {
+        toast.success("Laporan terkirim", {
+          description: "Laporan sudah tersimpan di server.",
+        });
+      }
+      setOpen(false);
+      setCatatan("");
+      setFoto(null);
+    } catch (error) {
+      toast.error("Laporan belum terkirim", {
+        description:
+          error instanceof Error
+            ? error.message
+            : "Periksa koneksi lalu coba lagi.",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-    const selectedRegion = regions.find((region) => region.name === desa);
-    addLaporan({
-      desa,
-      kecamatan: "Wilayah belum tersedia",
-      kabupaten:
-        regions.find((region) => region.id === selectedRegion?.parent_id)
-          ?.name ?? "Wilayah belum tersedia",
-      jenis,
-      catatan: catatan || "Tanpa catatan",
-    });
-    toast.success("Laporan terkirim", {
-      description: "Tim desa dan admin akan meninjau laporanmu.",
-    });
-    setOpen(false);
-    setCatatan("");
-    setFoto(null);
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Lokasi tidak didukung browser ini.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setLatitude(String(Number(coords.latitude.toFixed(6))));
+        setLongitude(String(Number(coords.longitude.toFixed(6))));
+      },
+      () =>
+        toast.error("Lokasi tidak dapat diakses", {
+          description: "Izinkan akses lokasi atau isi koordinat secara manual.",
+        }),
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
   };
 
   const handleFotoChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -108,7 +173,7 @@ export function ReportDialog({
             Laporanmu membantu memastikan titik api lebih cepat.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+        <form className="space-y-4" onSubmit={(event) => void submit(event)}>
           <div className="grid grid-cols-2 gap-2">
             {(["Api", "Asap"] as const).map((j) => (
               <button
@@ -131,16 +196,80 @@ export function ReportDialog({
             <SearchSelect
               ariaLabel="Pilih desa"
               searchPlaceholder="Cari desa…"
-              value={desa}
-              onChange={setDesa}
+              value={regionId}
+              onChange={setRegionId}
               options={regions.map((region) => ({
-                value: region.name,
+                value: region.id,
                 label: region.name,
               }))}
             />
             {regionsLoading && (
               <p className="text-xs text-muted-foreground">Memuat wilayah…</p>
             )}
+          </div>
+          <label className="block text-sm">
+            <span className="text-muted-foreground">
+              Nomor HP (format internasional)
+            </span>
+            <input
+              type="tel"
+              autoComplete="tel"
+              required
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              placeholder="+6281234567890"
+              pattern="[+][1-9][0-9]{7,14}"
+              className="mt-1 h-10 w-full rounded-xl border bg-background px-3"
+            />
+            <span className="mt-1 block text-xs text-muted-foreground">
+              Nomor dipakai untuk mengaitkan laporan dengan kontak warga dan
+              tidak ditampilkan ke publik.
+            </span>
+          </label>
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">
+                Titik lokasi kejadian
+              </span>
+              <button
+                type="button"
+                onClick={useCurrentLocation}
+                className="text-primary hover:underline"
+              >
+                Gunakan lokasi saya
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <label>
+                <span className="text-xs text-muted-foreground">Latitude</span>
+                <input
+                  required
+                  type="number"
+                  step="any"
+                  min="-90"
+                  max="90"
+                  value={latitude}
+                  onChange={(event) => setLatitude(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-xl border bg-background px-3"
+                />
+              </label>
+              <label>
+                <span className="text-xs text-muted-foreground">Longitude</span>
+                <input
+                  required
+                  type="number"
+                  step="any"
+                  min="-180"
+                  max="180"
+                  value={longitude}
+                  onChange={(event) => setLongitude(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-xl border bg-background px-3"
+                />
+              </label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Pastikan titik berada di desa yang dipilih.
+            </p>
           </div>
           <label className="block text-sm">
             <span className="text-muted-foreground">Catatan (opsional)</span>
@@ -169,13 +298,13 @@ export function ReportDialog({
             )}
           </label>
           <button
-            type="button"
-            onClick={submit}
+            type="submit"
+            disabled={submitting || regionsLoading || !regionId}
             className="w-full rounded-xl bg-primary py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90"
           >
-            Kirim laporan
+            {submitting ? "Mengirim laporan…" : "Kirim laporan"}
           </button>
-        </div>
+        </form>
       </DialogContent>
     </Dialog>
   );
