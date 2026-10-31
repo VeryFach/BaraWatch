@@ -79,8 +79,16 @@ export async function POST(request: Request) {
       signal: AbortSignal.timeout(180_000),
     });
     if (!response.ok) {
+      const body = await response.text();
+      let detail = "Burn-area estimation unavailable";
+      try {
+        const parsed = JSON.parse(body) as { detail?: unknown };
+        if (typeof parsed.detail === "string" && parsed.detail) detail = parsed.detail;
+      } catch {
+        if (body.trim()) detail = body.slice(0, 300);
+      }
       return Response.json(
-        { error: "Burn-area estimation unavailable" },
+        { error: detail },
         { status: response.status === 422 ? 422 : 502 },
       );
     }
