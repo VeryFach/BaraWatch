@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import {
   CircleMarker,
   MapContainer,
+  Marker,
   Polygon,
   Popup,
   TileLayer,
@@ -38,6 +39,11 @@ interface Props {
   regions?: PublicRegionBoundary[];
   regionLevels?: PublicRegionBoundary["level"][];
 }
+
+type LocatedReport = PublicReport & {
+  latitude: number;
+  longitude: number;
+};
 
 const konsesi: { nama: string; pts: [number, number][] }[] = [
   {
@@ -130,6 +136,20 @@ export default function FireMap({
         ? hotspotIds.includes(h.id)
         : !(hideFalse && h.status === "bukan-api"),
     );
+  const reportGroups = useMemo(() => {
+    const groups = new Map<string, LocatedReport[]>();
+    const locatedReports = reports.filter(
+      (report): report is LocatedReport =>
+        report.latitude !== null && report.longitude !== null,
+    );
+    for (const report of locatedReports) {
+      const key = `${report.latitude.toFixed(5)}:${report.longitude.toFixed(5)}`;
+      const group = groups.get(key) ?? [];
+      group.push(report);
+      groups.set(key, group);
+    }
+    return [...groups.values()];
+  }, [reports]);
   return (
     <MapContainer
       center={[-2.45, 114.1]}

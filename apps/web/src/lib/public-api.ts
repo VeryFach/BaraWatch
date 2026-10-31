@@ -35,7 +35,8 @@ export type PublicReport = Pick<
     id: string;
     name: string;
     level: PublicRegion["level"];
-    parent: { id: string; name: string } | null;
+    parent: { id: string; name: string; level?: PublicRegion["level"] } | null;
+    district?: { id: string; name: string } | null;
   } | null;
 };
 
@@ -43,7 +44,11 @@ export function reportToLaporan(report: PublicReport) {
   return {
     id: report.id,
     desa: report.region?.name ?? "Wilayah belum tersedia",
-    kabupaten: report.region?.parent?.name ?? "Wilayah belum tersedia",
+    kecamatan:
+      report.region?.parent?.level === "kecamatan"
+        ? report.region.parent.name
+        : "Wilayah belum tersedia",
+    kabupaten: report.region?.district?.name ?? "Wilayah belum tersedia",
     jenis: report.description?.toLowerCase().includes("asap")
       ? ("Asap" as const)
       : ("Api" as const),

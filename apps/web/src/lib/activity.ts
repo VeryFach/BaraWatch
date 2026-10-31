@@ -2,7 +2,6 @@ import type { Laporan } from "@/components/AppState";
 import {
   type Hotspot,
   type HotspotStatus,
-  hotspots,
   statusLabel,
 } from "@/lib/dummy-data";
 
@@ -12,6 +11,8 @@ export interface ActivityFilters {
   jenis: string;
   status: string;
   kabupaten: string;
+  kecamatan: string;
+  desa: string;
   urutan: string;
 }
 
@@ -20,6 +21,8 @@ export const defaultActivityFilters: ActivityFilters = {
   jenis: "semua",
   status: "all",
   kabupaten: "all",
+  kecamatan: "all",
+  desa: "all",
   urutan: "terbaru",
 };
 
@@ -32,6 +35,7 @@ export const reportStatusLabel: Record<Laporan["status"], string> = {
 interface ActivityBase {
   id: string;
   desa: string;
+  kecamatan: string;
   kabupaten: string;
   waktu: string;
   title: string;
@@ -52,41 +56,22 @@ export interface ActivityProgress {
   note: string;
 }
 
-export function buildActivities(
-  reports: Laporan[],
-  statusOf: (id: string) => HotspotStatus,
-  escalated: string[] = [],
-): Activity[] {
-  return [
-    ...reports.map(
-      (report): Activity => ({
-        kind: "laporan",
-        id: report.id,
-        desa: report.desa,
-        kabupaten: report.kabupaten,
-        waktu: report.waktu,
-        title: `${report.jenis} di ${report.desa}`,
-        summary: report.catatan,
-        status: report.status,
-        report,
-        escalated: false,
-      }),
-    ),
-    ...hotspots.map(
-      (hotspot): Activity => ({
-        kind: "kejadian",
-        id: hotspot.id,
-        desa: hotspot.desa,
-        kabupaten: hotspot.kabupaten,
-        waktu: hotspot.waktu,
-        title: `Titik api di ${hotspot.desa}`,
-        summary: `${hotspot.sumber} · ${hotspot.gambut ? "Gambut" : "Mineral"}`,
-        status: statusOf(hotspot.id),
-        hotspot,
-        escalated: escalated.includes(hotspot.id),
-      }),
-    ),
-  ];
+export function buildActivities(reports: Laporan[]): Activity[] {
+  return reports.map(
+    (report): Activity => ({
+      kind: "laporan",
+      id: report.id,
+      desa: report.desa,
+      kecamatan: report.kecamatan,
+      kabupaten: report.kabupaten,
+      waktu: report.waktu,
+      title: `${report.jenis} di ${report.desa}`,
+      summary: report.catatan,
+      status: report.status,
+      report,
+      escalated: false,
+    }),
+  );
 }
 
 export function activityProgress(activity: Activity): ActivityProgress {
@@ -144,13 +129,20 @@ export function filterActivities(
   filters: ActivityFilters,
 ): Activity[] {
   const query = filters.query.trim().toLocaleLowerCase("id");
+  const jenis = filters.jenis || "semua";
+  const status = filters.status || "all";
+  const kabupaten = filters.kabupaten || "all";
+  const kecamatan = filters.kecamatan || "all";
+  const desa = filters.desa || "all";
   return rows
     .filter(
       (a) =>
-        (filters.jenis === "semua" || a.kind === filters.jenis) &&
-        (filters.status === "all" || a.status === filters.status) &&
-        (filters.kabupaten === "all" || a.kabupaten === filters.kabupaten) &&
-        `${a.id} ${a.title} ${a.kabupaten} ${a.summary}`
+        (jenis === "semua" || a.kind === jenis) &&
+        (status === "all" || a.status === status) &&
+        (kabupaten === "all" || a.kabupaten === kabupaten) &&
+        (kecamatan === "all" || a.kecamatan === kecamatan) &&
+        (desa === "all" || a.desa === desa) &&
+        `${a.id} ${a.title} ${a.kecamatan} ${a.kabupaten} ${a.summary}`
           .toLocaleLowerCase("id")
           .includes(query),
     )

@@ -23,6 +23,7 @@ export type HotspotStatus =
 export interface Hotspot {
   id: string;
   desa: string;
+  kecamatan: string;
   kabupaten: string;
   lat: number;
   lng: number;
@@ -47,6 +48,7 @@ export interface Hotspot {
 export interface Desa {
   id: string;
   nama: string;
+  kecamatan: string;
   kabupaten: string;
   lat: number;
   lng: number;
@@ -127,8 +129,44 @@ const regions: DbRegion[] = [
     is_pilot: true,
   },
   {
-    id: "00000000-0000-4000-8000-000000000101",
+    id: "00000000-0000-4000-8000-000000000020",
     parent_id: "00000000-0000-4000-8000-000000000010",
+    level: "kecamatan",
+    code: "627101",
+    name: "Sebangau",
+    latitude: -2.28,
+    longitude: 113.96,
+    area_ha: null,
+    peat_ratio: null,
+    is_pilot: true,
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000021",
+    parent_id: "00000000-0000-4000-8000-000000000011",
+    level: "kecamatan",
+    code: "621001",
+    name: "Jabiren Raya",
+    latitude: -2.45,
+    longitude: 114.12,
+    area_ha: null,
+    peat_ratio: null,
+    is_pilot: true,
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000022",
+    parent_id: "00000000-0000-4000-8000-000000000012",
+    level: "kecamatan",
+    code: "620301",
+    name: "Mantangai",
+    latitude: -2.7,
+    longitude: 114.4,
+    area_ha: null,
+    peat_ratio: null,
+    is_pilot: true,
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000101",
+    parent_id: "00000000-0000-4000-8000-000000000020",
     level: "desa",
     code: "627101",
     name: "Kalampangan",
@@ -140,7 +178,7 @@ const regions: DbRegion[] = [
   },
   {
     id: "00000000-0000-4000-8000-000000000102",
-    parent_id: "00000000-0000-4000-8000-000000000011",
+    parent_id: "00000000-0000-4000-8000-000000000021",
     level: "desa",
     code: "621001",
     name: "Tumbang Nusa",
@@ -152,7 +190,7 @@ const regions: DbRegion[] = [
   },
   {
     id: "00000000-0000-4000-8000-000000000103",
-    parent_id: "00000000-0000-4000-8000-000000000011",
+    parent_id: "00000000-0000-4000-8000-000000000021",
     level: "desa",
     code: "621002",
     name: "Jabiren",
@@ -164,7 +202,7 @@ const regions: DbRegion[] = [
   },
   {
     id: "00000000-0000-4000-8000-000000000104",
-    parent_id: "00000000-0000-4000-8000-000000000012",
+    parent_id: "00000000-0000-4000-8000-000000000022",
     level: "desa",
     code: "620301",
     name: "Mantangai",
@@ -176,7 +214,7 @@ const regions: DbRegion[] = [
   },
   {
     id: "00000000-0000-4000-8000-000000000105",
-    parent_id: "00000000-0000-4000-8000-000000000011",
+    parent_id: "00000000-0000-4000-8000-000000000021",
     level: "desa",
     code: "621003",
     name: "Sebangau Kuala",
@@ -188,7 +226,7 @@ const regions: DbRegion[] = [
   },
   {
     id: "00000000-0000-4000-8000-000000000106",
-    parent_id: "00000000-0000-4000-8000-000000000012",
+    parent_id: "00000000-0000-4000-8000-000000000022",
     level: "desa",
     code: "620302",
     name: "Basarang",
@@ -200,7 +238,7 @@ const regions: DbRegion[] = [
   },
   {
     id: "00000000-0000-4000-8000-000000000107",
-    parent_id: "00000000-0000-4000-8000-000000000010",
+    parent_id: "00000000-0000-4000-8000-000000000020",
     level: "desa",
     code: "627102",
     name: "Kereng Bangkirai",
@@ -212,7 +250,7 @@ const regions: DbRegion[] = [
   },
   {
     id: "00000000-0000-4000-8000-000000000108",
-    parent_id: "00000000-0000-4000-8000-000000000011",
+    parent_id: "00000000-0000-4000-8000-000000000021",
     level: "desa",
     code: "621004",
     name: "Bawan",
@@ -804,12 +842,16 @@ function formatTime(value: string) {
 export const hotspots: Hotspot[] = dbHotspots.map((hotspot) => {
   const village = regionById.get(hotspot.region_id ?? "");
   const district = village
+    ? regionById.get(regionById.get(village.parent_id ?? "")?.parent_id ?? "")
+    : undefined;
+  const subdistrict = village
     ? regionById.get(village.parent_id ?? "")
     : undefined;
   const incident = incidentById.get(hotspot.incident_id ?? "");
   return {
     id: `HS-${hotspot.id.slice(-4)}`,
     desa: village?.name ?? "Wilayah belum tersedia",
+    kecamatan: subdistrict?.name ?? "Wilayah belum tersedia",
     kabupaten: district?.name ?? "Wilayah belum tersedia",
     lat: hotspot.latitude,
     lng: hotspot.longitude,
@@ -839,9 +881,12 @@ export const desaList: Desa[] = regions
     return {
       id: region.id,
       nama: region.name,
-      kabupaten:
+      kecamatan:
         regionById.get(region.parent_id ?? "")?.name ??
         "Wilayah belum tersedia",
+      kabupaten:
+        regionById.get(regionById.get(region.parent_id ?? "")?.parent_id ?? "")
+          ?.name ?? "Wilayah belum tersedia",
       lat: region.latitude,
       lng: region.longitude,
       risk: risk?.level ?? "rendah",
@@ -919,6 +964,13 @@ export const laporanSeeds: LaporanSeed[] = dbReports.map((report) => {
   return {
     id: `LP-${report.id.slice(-3)}`,
     desa: village?.name ?? "Wilayah belum tersedia",
+    kecamatan:
+      regionById.get(village?.parent_id ?? "")?.name ??
+      "Wilayah belum tersedia",
+    kabupaten:
+      regionById.get(
+        regionById.get(village?.parent_id ?? "")?.parent_id ?? "",
+      )?.name ?? "Wilayah belum tersedia",
     jenis: report.description?.toLowerCase().includes("asap") ? "Asap" : "Api",
     catatan: report.description ?? "Deskripsi belum tersedia",
     waktu: formatTime(report.created_at),

@@ -16,22 +16,45 @@ import {
 import { cn } from "@/lib/utils";
 
 export default function ReportsPage() {
-  const { laporan, reportsLoading, reportsError, statusOf, escalated } =
-    useApp();
+  const { laporan, reportsLoading, reportsError } = useApp();
   const [filters, setFilters] = useState<ActivityFilters>({
     query: "",
     jenis: "semua",
     status: "all",
     kabupaten: "all",
+    kecamatan: "all",
+    desa: "all",
     urutan: "terbaru",
   });
   const [open, setOpen] = useState<string | null>(null);
+  const allActivities = useMemo(() => buildActivities(laporan), [laporan]);
   const activities = useMemo(
-    () =>
-      filterActivities(buildActivities(laporan, statusOf, escalated), filters),
-    [laporan, statusOf, escalated, filters],
+    () => filterActivities(allActivities, filters),
+    [allActivities, filters],
   );
-  const districts = [...new Set(activities.map((a) => a.kabupaten))];
+  const districts = [...new Set(allActivities.map((a) => a.kabupaten))];
+  const kecamatans = [
+    ...new Set(
+      allActivities
+        .filter(
+          (a) =>
+            filters.kabupaten === "all" || a.kabupaten === filters.kabupaten,
+        )
+        .map((a) => a.kecamatan),
+    ),
+  ].sort();
+  const villages = [
+    ...new Set(
+      allActivities
+        .filter(
+          (a) =>
+            (filters.kabupaten === "all" ||
+              a.kabupaten === filters.kabupaten) &&
+            (filters.kecamatan === "all" || a.kecamatan === filters.kecamatan),
+        )
+        .map((a) => a.desa),
+    ),
+  ].sort();
   return (
     <main className="mx-auto max-w-6xl space-y-8 px-4 py-10 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -77,7 +100,12 @@ export default function ReportsPage() {
         <select
           value={filters.kabupaten}
           onChange={(e) =>
-            setFilters((p) => ({ ...p, kabupaten: e.target.value }))
+            setFilters((p) => ({
+              ...p,
+              kabupaten: e.target.value,
+              kecamatan: "all",
+              desa: "all",
+            }))
           }
           className="h-10 rounded-md border bg-background px-3 text-sm"
         >
@@ -85,6 +113,36 @@ export default function ReportsPage() {
           {districts.map((d) => (
             <option key={d} value={d}>
               {d}
+            </option>
+          ))}
+        </select>
+        <select
+          value={filters.kecamatan}
+          onChange={(e) =>
+            setFilters((p) => ({
+              ...p,
+              kecamatan: e.target.value,
+              desa: "all",
+            }))
+          }
+          className="h-10 rounded-md border bg-background px-3 text-sm"
+        >
+          <option value="all">Semua kecamatan</option>
+          {kecamatans.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
+        <select
+          value={filters.desa}
+          onChange={(e) => setFilters((p) => ({ ...p, desa: e.target.value }))}
+          className="h-10 rounded-md border bg-background px-3 text-sm"
+        >
+          <option value="all">Semua desa</option>
+          {villages.map((value) => (
+            <option key={value} value={value}>
+              {value}
             </option>
           ))}
         </select>

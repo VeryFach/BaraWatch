@@ -3,7 +3,6 @@
 import { Camera, Filter, Flame, RotateCcw, Search } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useApp } from "@/components/AppState";
 import { ClientMap } from "@/components/ClientMap";
 import { HotspotDetails } from "@/components/HotspotDetails";
 import { SearchSelect } from "@/components/SearchSelect";
@@ -15,7 +14,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { desaList, hotspots, statusLabel } from "@/lib/dummy-data";
+import { desaList, statusLabel } from "@/lib/dummy-data";
 import {
   defaultMapFilters,
   filterHotspots,
@@ -41,10 +40,8 @@ function MapContent() {
   const router = useRouter();
   const selectedId = useSearchParams().get("id");
   const selectedReportId = useSearchParams().get("report");
-  const { statusOf } = useApp();
   const [filters, setFilters] = useState<MapFilters>(defaultMapFilters);
   const [showRisk, setShowRisk] = useState(true);
-  const [showHotspots, setShowHotspots] = useState(true);
   const [showReports, setShowReports] = useState(true);
   const [showKonsesi, setShowKonsesi] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -73,11 +70,7 @@ function MapContent() {
         setMapDataError("Data wilayah dan laporan belum dapat dimuat."),
       );
   }, []);
-  const rows = useMemo(
-    () => hotspots.map((h) => ({ ...h, status: statusOf(h.id) })),
-    [statusOf],
-  );
-  const list = filterHotspots(rows, filters);
+  const list = useMemo(() => filterHotspots([], filters), [filters]);
   const reportList = useMemo(() => {
     const query = filters.query.trim().toLowerCase();
     return reports.filter((report) => {
@@ -93,19 +86,65 @@ function MapContent() {
   }, [filters.kabupaten, filters.query, reports]);
   const districts = useMemo(
     () =>
-      [
-        ...hotspots.map((hotspot) => hotspot.kabupaten),
-        ...reports.map((report) => report.region?.parent?.name ?? ""),
-      ]
+      [...reports.map((report) => report.region?.parent?.name ?? "")]
         .filter(Boolean)
         .filter((district, index, values) => values.indexOf(district) === index)
         .sort(),
     [reports],
   );
+  const kecamatans = useMemo(
+    () =>
+      [
+        ...new Set(
+          desaList
+            .filter(
+              (desa) =>
+                filters.kabupaten === "all" ||
+                desa.kabupaten === filters.kabupaten,
+            )
+            .map((desa) => desa.kecamatan),
+        ),
+      ].sort(),
+    [filters.kabupaten],
+  );
+  const villagesForFilter = useMemo(
+    () =>
+      [
+        ...new Set(
+          desaList
+            .filter(
+              (desa) =>
+                (filters.kabupaten === "all" ||
+                  desa.kabupaten === filters.kabupaten) &&
+                (filters.kecamatan === "all" ||
+                  desa.kecamatan === filters.kecamatan),
+            )
+            .map((desa) => desa.nama),
+        ),
+      ].sort(),
+    [filters.kabupaten, filters.kecamatan],
+  );
   const villages = filterVillages(desaList, filters);
   const selected = list.find((hotspot) => hotspot.id === selectedId);
   const update = <K extends keyof MapFilters>(key: K, value: MapFilters[K]) => {
     setFilters((previous) => ({ ...previous, [key]: value }));
+    router.replace("/peta");
+  };
+  const updateKabupaten = (value: string) => {
+    setFilters((previous) => ({
+      ...previous,
+      kabupaten: value,
+      kecamatan: "all",
+      desa: "all",
+    }));
+    router.replace("/peta");
+  };
+  const updateKecamatan = (value: string) => {
+    setFilters((previous) => ({
+      ...previous,
+      kecamatan: value,
+      desa: "all",
+    }));
     router.replace("/peta");
   };
   const reset = () => {
@@ -114,6 +153,8 @@ function MapContent() {
   };
   const active =
     Number(filters.kabupaten !== "all") +
+    Number(filters.kecamatan !== "all") +
+    Number(filters.desa !== "all") +
     Number(filters.status !== "all") +
     Number(filters.lahan !== "all") +
     Number(!filters.hideFalse);
@@ -152,7 +193,7 @@ function MapContent() {
                   {active > 0 && <span className="text-xs">{active}</span>}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="start" className="z-[1100] w-72 space-y-4">
+              <PopoverContent align="start" className="z-[2000] w-72 space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="font-semibold">Filter titik api</h2>
                   <Button
@@ -167,10 +208,34 @@ function MapContent() {
                 <SearchSelect
                   ariaLabel="Kabupaten / kota"
                   value={filters.kabupaten}
-                  onChange={(v) => update("kabupaten", v)}
+                  onChange={updateKabupaten}
                   options={[
                     { value: "all", label: "Semua wilayah" },
                     ...districts.map((d) => ({ value: d, label: d })),
+                  ]}
+                />
+                <SearchSelect
+                  ariaLabel="Kecamatan"
+                  value={filters.kecamatan}
+                  onChange={updateKecamatan}
+                  options={[
+                    { value: "all", label: "Semua kecamatan" },
+                    ...kecamatans.map((kecamatan) => ({
+                      value: kecamatan,
+                      label: kecamatan,
+                    })),
+                  ]}
+                />
+                <SearchSelect
+                  ariaLabel="Desa"
+                  value={filters.desa}
+                  onChange={(v) => update("desa", v)}
+                  options={[
+                    { value: "all", label: "Semua desa" },
+                    ...villagesForFilter.map((desa) => ({
+                      value: desa,
+                      label: desa,
+                    })),
                   ]}
                 />
                 <SearchSelect
@@ -310,7 +375,7 @@ function MapContent() {
       <section className="relative order-1 min-h-[48vh] flex-1 md:order-2">
         <ClientMap
           showRisk={showRisk}
-          showHotspots={showHotspots}
+          showHotspots={false}
           showReports={showReports}
           hideFalse={filters.hideFalse}
           selectedId={selectedId}
@@ -340,15 +405,6 @@ function MapContent() {
                 }
               />
               Risiko desa
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                checked={showHotspots}
-                onCheckedChange={(v: boolean | "indeterminate") =>
-                  setShowHotspots(v === true)
-                }
-              />
-              Titik api
             </div>
             <div className="flex items-center gap-2">
               <Checkbox

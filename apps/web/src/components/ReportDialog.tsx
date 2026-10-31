@@ -64,6 +64,7 @@ export function ReportDialog({
     const selectedRegion = regions.find((region) => region.name === desa);
     addLaporan({
       desa,
+      kecamatan: "Wilayah belum tersedia",
       kabupaten:
         regions.find((region) => region.id === selectedRegion?.parent_id)
           ?.name ?? "Wilayah belum tersedia",

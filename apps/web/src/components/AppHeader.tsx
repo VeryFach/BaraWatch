@@ -7,6 +7,7 @@ import {
   KeyRound,
   LayoutDashboard,
   LogIn,
+  LogOut,
   Map as MapIcon,
   X,
 } from "lucide-react";
@@ -183,8 +184,10 @@ export function AppHeader() {
                     window.location.reload();
                   })()
                 }
-                className="hidden rounded-full px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground lg:inline"
+                aria-label="Keluar"
+                className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
               >
+                <LogOut className="h-4 w-4" />
                 Keluar
               </button>
             </>
