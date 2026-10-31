@@ -8,6 +8,7 @@ import {
   Flame,
   ScrollText,
   ShieldCheck,
+  Users,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -270,7 +271,7 @@ function AlertList() {
   );
 }
 
-function PetugasView() {
+export function PetugasView() {
   const active = hotspots.filter((h) => h.status !== "bukan-api").length;
   const verified = hotspots.filter((h) => h.status === "diverifikasi").length;
   return (
@@ -349,18 +350,26 @@ function TeamCard() {
   );
 }
 
-function AdminView() {
+export function AdminView() {
   const { laporan, setLaporanStatus } = useApp();
   const pending = laporan.filter((report) => report.status === "menunggu");
   return (
     <>
-      <header>
-        <p className="text-sm text-muted-foreground">
-          Administrasi data dan kualitas model
-        </p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-          Selamat sore, admin
-        </h1>
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className="text-sm text-muted-foreground">
+            Administrasi data dan kualitas model
+          </p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight">
+            Selamat sore, admin
+          </h1>
+        </div>
+        <Button asChild className="gap-2">
+          <Link href="/admin/users">
+            <Users className="h-4 w-4" />
+            Kelola Pengguna & Kontak
+          </Link>
+        </Button>
       </header>
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
@@ -512,7 +521,7 @@ function AdminView() {
   );
 }
 
-function HukumView() {
+export function HukumView() {
   return (
     <>
       <header>
