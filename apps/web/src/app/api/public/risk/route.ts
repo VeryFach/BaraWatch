@@ -1,5 +1,5 @@
-import { desaList } from "@/lib/dummy-data";
+import { dbFixtures } from "@/lib/dummy-data";
 
 export function GET() {
-  return Response.json({ data: desaList });
+  return Response.json({ data: dbFixtures.riskScores });
 }

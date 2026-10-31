@@ -84,7 +84,7 @@ export function LawDashboard() {
   const stats = [
     {
       label: "Estimasi lahan terbakar",
-      value: `${formatHa(cases.reduce((sum, row) => sum + row.hotspot.luasHa, 0))} ha`,
+      value: `${formatHa(cases.reduce((sum, row) => sum + (row.hotspot.luasHa ?? 0), 0))} ha`,
       icon: Flame,
     },
     {
@@ -243,7 +243,9 @@ function LandCaseRow({
         </div>
       </div>
       <div className="text-sm font-semibold text-destructive">
-        {formatHa(row.hotspot.luasHa)} ha
+        {row.hotspot.luasHa === null
+          ? "Belum dihitung"
+          : `${formatHa(row.hotspot.luasHa)} ha`}
         <div className="mt-1 text-xs font-normal text-muted-foreground">
           Bidang: {formatHa(row.parcel.areaHa)} ha
         </div>
@@ -325,7 +327,9 @@ function OwnershipDetail({ landCase: row }: { landCase: LandCase }) {
             Estimasi luas terbakar
           </dt>
           <dd className="mt-1 text-xl font-semibold text-destructive">
-            {formatHa(row.hotspot.luasHa)} ha
+            {row.hotspot.luasHa === null
+              ? "Belum dihitung"
+              : `${formatHa(row.hotspot.luasHa)} ha`}
           </dd>
         </div>
         <div>

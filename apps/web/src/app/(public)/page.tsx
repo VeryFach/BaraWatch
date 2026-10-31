@@ -103,13 +103,13 @@ function WeatherRow() {
     <div className="grid grid-cols-3 gap-3 text-sm">
       <div>
         <Droplets className="mb-1 h-4 w-4 text-muted-foreground" />
-        {weather.kelembapan}%
+        {weather.kelembapan === null ? "—" : `${weather.kelembapan}%`}
         <div className="text-xs text-muted-foreground">Kelembapan</div>
       </div>
 
       <div>
         <CloudSun className="mb-1 h-4 w-4 text-muted-foreground" />
-        {weather.suhu}°C
+        {weather.suhu === null ? "—" : `${weather.suhu}°C`}
         <div className="text-xs text-muted-foreground">Suhu</div>
       </div>
 
@@ -420,7 +420,7 @@ function PublicDashboard() {
               value: item.nama,
               label: item.nama,
             }))}
-            triggerClassName="mt-2 h-12 text-base font-medium"
+            triggerClassName="mt-2 h-12 text-base font-medium text-foreground"
           />
 
           <div className="mt-8 flex items-center gap-5">

@@ -1,5 +1,5 @@
-import { hotspots } from "@/lib/dummy-data";
+import { dbFixtures } from "@/lib/dummy-data";
 
 export function GET() {
-  return Response.json({ data: hotspots });
+  return Response.json({ data: dbFixtures.hotspots });
 }

@@ -333,7 +333,10 @@ function TeamCard() {
             <div>
               <div className="font-medium">{resource.nama}</div>
               <div className="text-muted-foreground">
-                {resource.lokasi} · {resource.anggota} orang
+                {resource.lokasi} ·{" "}
+                {resource.anggota === null
+                  ? "Jumlah belum tersedia"
+                  : `${resource.anggota} orang`}
               </div>
             </div>
             <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs">
