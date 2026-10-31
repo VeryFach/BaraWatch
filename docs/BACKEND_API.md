@@ -114,7 +114,8 @@ Endpoint berikut saat ini mengembalikan:
 
 ### `GET /api/public/regions`
 
-Mengambil wilayah dari tabel `regions` tanpa geometry mentah.
+Mengambil wilayah dari view `public_regions`, termasuk geometry GeoJSON untuk
+lapisan batas peta. Geometry dapat difilter berdasarkan level.
 
 Query opsional:
 
