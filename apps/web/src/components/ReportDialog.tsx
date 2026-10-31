@@ -1,4 +1,4 @@
-import { type ChangeEvent, type ReactNode, useState } from "react";
+import { type ChangeEvent, type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useApp } from "@/components/AppState";
 import { SearchSelect } from "@/components/SearchSelect";
@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { desaList } from "@/lib/dummy-data";
+import type { PublicRegion } from "@/lib/public-api";
 import { cn } from "@/lib/utils";
 
 export function ReportDialog({
@@ -22,10 +22,36 @@ export function ReportDialog({
 }) {
   const { addLaporan } = useApp();
   const [open, setOpen] = useState(false);
-  const [desa, setDesa] = useState(defaultDesa ?? desaList[0]?.nama ?? "");
+  const [desa, setDesa] = useState(defaultDesa ?? "");
+  const [regions, setRegions] = useState<PublicRegion[]>([]);
+  const [regionsLoading, setRegionsLoading] = useState(true);
   const [jenis, setJenis] = useState<"Api" | "Asap">("Api");
   const [catatan, setCatatan] = useState("");
   const [foto, setFoto] = useState<File | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/public/regions")
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Unable to load regions");
+        return (await response.json()) as { data: PublicRegion[] };
+      })
+      .then(({ data }) => {
+        if (!active) return;
+        const villages = data.filter((region) => region.level === "desa");
+        setRegions(villages);
+        if (!defaultDesa && villages[0]) setDesa(villages[0].name);
+      })
+      .catch(() => {
+        if (active) setRegions([]);
+      })
+      .finally(() => {
+        if (active) setRegionsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [defaultDesa]);
 
   const submit = () => {
     if (foto && !isJpegFile(foto)) {
@@ -35,7 +61,15 @@ export function ReportDialog({
       return;
     }
 
-    addLaporan({ desa, jenis, catatan: catatan || "Tanpa catatan" });
+    const selectedRegion = regions.find((region) => region.name === desa);
+    addLaporan({
+      desa,
+      kabupaten:
+        regions.find((region) => region.id === selectedRegion?.parent_id)
+          ?.name ?? "Wilayah belum tersedia",
+      jenis,
+      catatan: catatan || "Tanpa catatan",
+    });
     toast.success("Laporan terkirim", {
       description: "Tim desa dan admin akan meninjau laporanmu.",
     });
@@ -98,8 +132,14 @@ export function ReportDialog({
               searchPlaceholder="Cari desa…"
               value={desa}
               onChange={setDesa}
-              options={desaList.map((d) => ({ value: d.nama, label: d.nama }))}
+              options={regions.map((region) => ({
+                value: region.name,
+                label: region.name,
+              }))}
             />
+            {regionsLoading && (
+              <p className="text-xs text-muted-foreground">Memuat wilayah…</p>
+            )}
           </div>
           <label className="block text-sm">
             <span className="text-muted-foreground">Catatan (opsional)</span>

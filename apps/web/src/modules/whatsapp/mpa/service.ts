@@ -148,6 +148,7 @@ export async function classifyReport(
       updated_at: new Date().toISOString(),
     }),
   });
+
   if (report.incident_id) {
     await supabaseRequest("assessments", {
       method: "POST",
@@ -159,7 +160,35 @@ export async function classifyReport(
         is_current: true,
       }),
     });
+
+    if (isRealFire) {
+      await supabaseRequest("escalations", {
+        method: "POST",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({
+          incident_id: report.incident_id,
+          escalated_by: mpaContactId,
+          summary: {
+            source: "mpa_verification",
+            report_id: report.id,
+            verdict: "real_fire",
+          },
+          no_officer_fallback: false,
+        }),
+      });
+    }
   }
+
+  await supabaseRequest("training_labels", {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      report_id: report.id,
+      label: isRealFire ? "valid" : "not_fire",
+      source: "mpa_consensus",
+    }),
+  });
+
   return { report, status, alreadyClassified: false, mpaContactId };
 }
 

@@ -91,6 +91,7 @@ export interface DbWeeklyFeature {
 export interface DbReport {
   id: string;
   contact_id: string;
+  region_id?: string | null;
   incident_id: string | null;
   duplicate_of: string | null;
   matched_hotspot_id: string | null;

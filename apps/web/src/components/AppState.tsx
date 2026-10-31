@@ -7,12 +7,13 @@ import {
   useEffect,
   useState,
 } from "react";
-import { type HotspotStatus, hotspots, laporanSeeds } from "@/lib/dummy-data";
+import { type HotspotStatus, hotspots } from "@/lib/dummy-data";
 import {
   type OwnershipReviewInput,
   type OwnershipReviews,
   validateOwnershipReview,
 } from "@/lib/land-ownership";
+import { type PublicReport, reportToLaporan } from "@/lib/public-api";
 import {
   can as canFn,
   defaultRole,
@@ -26,8 +27,11 @@ export interface Laporan {
   desa: string;
   jenis: "Api" | "Asap";
   catatan: string;
+  kabupaten: string;
   waktu: string;
+  waktuIso: string;
   skorAI: number;
+  imageUrl: string | null;
   status: "menunggu" | "diterima" | "ditolak";
 }
 
@@ -40,7 +44,14 @@ interface Ctx {
   escalated: string[];
   escalate: (id: string) => void;
   laporan: Laporan[];
-  addLaporan: (l: Omit<Laporan, "id" | "waktu" | "skorAI" | "status">) => void;
+  reportsLoading: boolean;
+  reportsError: string | null;
+  addLaporan: (
+    l: Omit<
+      Laporan,
+      "id" | "waktu" | "waktuIso" | "skorAI" | "status" | "imageUrl"
+    >,
+  ) => void;
   setLaporanStatus: (id: string, s: Laporan["status"]) => void;
   ownershipReviews: OwnershipReviews;
   reviewOwnership: (
@@ -51,15 +62,13 @@ interface Ctx {
 
 const AppCtx = createContext<Ctx | null>(null);
 
-const initialLaporan: Laporan[] = laporanSeeds.map(
-  ({ sourceReport: _sourceReport, ...report }) => report,
-);
-
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [role, setRoleState] = useState<Role>(defaultRole);
   const [statuses, setStatuses] = useState<Record<string, HotspotStatus>>({});
   const [escalated, setEscalated] = useState<string[]>([]);
-  const [laporan, setLaporan] = useState<Laporan[]>(initialLaporan);
+  const [laporan, setLaporan] = useState<Laporan[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [reportsError, setReportsError] = useState<string | null>(null);
   const [ownershipReviews, setOwnershipReviews] = useState<OwnershipReviews>(
     {},
   );
@@ -67,6 +76,30 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const saved = localStorage.getItem("demo-role");
     if (isRole(saved)) setRoleState(saved);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/public/reports")
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Unable to load reports");
+        return (await response.json()) as { data: PublicReport[] };
+      })
+      .then(({ data }) => {
+        if (active) setLaporan(data.map(reportToLaporan));
+      })
+      .catch(() => {
+        if (active) {
+          setLaporan([]);
+          setReportsError("Laporan belum dapat dimuat.");
+        }
+      })
+      .finally(() => {
+        if (active) setReportsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const setRole = (r: Role) => {
@@ -84,15 +117,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     escalated,
     escalate: (id) => setEscalated((p) => (p.includes(id) ? p : [...p, id])),
     laporan,
+    reportsLoading,
+    reportsError,
     addLaporan: (l) => {
       const now = new Date();
       setLaporan((p) => [
         {
           ...l,
-          id: `LP-${222 + p.length - initialLaporan.length}`,
+          id: `local-${crypto.randomUUID()}`,
           waktu: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
+          waktuIso: now.toISOString(),
           skorAI: Math.round((0.4 + Math.random() * 0.55) * 100) / 100,
           status: "menunggu",
+          imageUrl: null,
         },
         ...p,
       ]);

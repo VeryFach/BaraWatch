@@ -54,3 +54,34 @@ export async function uploadToSupabaseStorage(
     throw new Error(`Supabase Storage upload failed (${response.status})`);
   }
 }
+
+export async function createSupabaseStorageSignedUrl(
+  path: string,
+  expiresIn = 3600,
+): Promise<string> {
+  const env = getServerEnv();
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const response = await fetch(
+    `${env.supabaseUrl}/storage/v1/object/sign/${encodeURIComponent(env.storageBucket)}/${encodedPath}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.supabaseServiceRoleKey}`,
+        apikey: env.supabaseServiceRoleKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ expiresIn }),
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Supabase Storage signed URL failed (${response.status})`);
+  }
+  const result = (await response.json()) as { signedURL?: string };
+  if (!result.signedURL) {
+    throw new Error("Supabase Storage returned no signed URL");
+  }
+  return result.signedURL.startsWith("http")
+    ? result.signedURL
+    : `${env.supabaseUrl}/storage/v1${result.signedURL}`;
+}

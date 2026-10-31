@@ -21,6 +21,8 @@ token Twilio, `AI_INTERNAL_KEY`, atau `BARAWATCH_AI_API_KEY` dari browser.
 | GET | `/api/public/hotspots` | Publik | Scaffold, mengembalikan data kosong |
 | GET | `/api/public/incidents` | Publik | Scaffold, mengembalikan data kosong |
 | GET | `/api/public/risk` | Publik | Scaffold, mengembalikan data kosong |
+| GET | `/api/public/regions` | Publik | Data wilayah dari Supabase |
+| GET | `/api/public/reports` | Publik | Data laporan tersanitasi dari Supabase |
 | POST | `/api/webhooks/whatsapp` | `X-Twilio-Signature` | Webhook inbound Twilio |
 | GET | `/api/debug/twilio` | `TWILIO_DEBUG=true` | Tes kredensial Twilio |
 | GET | `/api/cron/ingest-hotspots` | Belum diterapkan | Scaffold |
@@ -110,6 +112,58 @@ Endpoint berikut saat ini mengembalikan:
 - `GET /api/public/incidents`
 - `GET /api/public/risk`
 
+### `GET /api/public/regions`
+
+Mengambil wilayah dari tabel `regions` tanpa geometry mentah.
+
+Query opsional:
+
+- `level=desa`
+- `parent_id=<uuid>`
+
+Response:
+
+```json
+{
+  "data": [
+    {
+      "id": "uuid",
+      "parent_id": "uuid",
+      "level": "desa",
+      "code": "6201...",
+      "name": "Nama Desa"
+    }
+  ]
+}
+```
+
+### `GET /api/public/reports`
+
+Mengambil laporan warga yang sudah disanitasi untuk frontend. Data ini
+menggunakan view `public_reports`, yang menghitung `latitude` dan `longitude`
+dari kolom PostGIS `geom`; `contact_id` tidak pernah dikirim.
+
+Query opsional:
+
+- `status=received|in_review|verified|handled|rejected`
+- `region_id=<uuid>`
+- `limit=1..100`, default `50`
+
+Response menyertakan koordinat, status/verifikasi, deskripsi, ringkasan region
+desa beserta parent kabupatennya, dan `media` berisi signed URL gambar/video
+laporan. URL media berlaku terbatas dan dibuat server-side.
+
+```json
+{
+  "media": [
+    {
+      "url": "https://project.supabase.co/storage/v1/object/sign/...",
+      "mediaType": "image"
+    }
+  ]
+}
+```
+
 ### `POST /api/webhooks/whatsapp`
 
 Webhook menerima `application/x-www-form-urlencoded` dari Twilio.
@@ -148,6 +202,17 @@ Lokasi laporan diproses sebagai point PostGIS. Sistem mencari polygon
 database mengulang assignment ini saat `reports.geom` dibuat atau diubah,
 sehingga assignment tetap konsisten walaupun report dibuat oleh caller lain.
 Jika titik berada di luar semua boundary desa, `region_id` tetap `null`.
+
+Setelah MPA mengirim keputusan verifikasi:
+
+- `reports` diperbarui menjadi `verified` atau `rejected`.
+- `assessments` dibuat untuk `incident_id` jika report sudah terhubung ke incident.
+- `training_labels` dibuat pada `report_id` dengan label `valid` untuk api nyata
+  atau `not_fire` untuk bukan api.
+- `escalations` dibuat untuk incident yang diverifikasi sebagai api nyata.
+
+`assessments` dan `escalations` tidak dibuat bila `reports.incident_id` masih
+`null`, karena kedua tabel tersebut mensyaratkan incident.
 
 ### `GET /api/debug/twilio`
 
