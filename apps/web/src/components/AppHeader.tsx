@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   LogIn,
   Map as MapIcon,
+  Users,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -25,18 +26,10 @@ import {
 import {
   allPermissions,
   can,
-  isRole,
   permissionLabel,
   type Role,
   roles,
 } from "@/lib/roles";
-import { createClient } from "@/lib/supabase/browser";
-
-const nav = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/peta", label: "Peta", icon: MapIcon },
-  { href: "/laporan", label: "Laporan", icon: ClipboardList },
-];
 
 export function AccessDialog() {
   const { role } = useApp();
@@ -105,30 +98,32 @@ export function AppHeader() {
   const [mounted, setMounted] = useState(false);
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
 
+  const dashboardHref =
+    role === "admin"
+      ? "/admin"
+      : role === "petugas"
+        ? "/petugas"
+        : role === "hukum"
+          ? "/penegak-hukum"
+          : "/";
+
+  const navigationItems = [
+    { href: dashboardHref, label: "Dashboard", icon: LayoutDashboard },
+    ...(role === "admin"
+      ? [{ href: "/admin/users", label: "Pengguna", icon: Users }]
+      : []),
+    { href: "/peta", label: "Peta", icon: MapIcon },
+    { href: "/laporan", label: "Laporan", icon: ClipboardList },
+  ];
+
   useEffect(() => {
     setMounted(true);
-    if (isRole(sessionStorage.getItem("barawatch-demo-role"))) {
-      setAuthenticated(true);
-    }
-    if (
-      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-      !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    ) {
-      setAuthenticated(false);
-      return;
-    }
-
-    const supabase = createClient();
-    void supabase.auth.getUser().then(({ data: { user } }) => {
-      setAuthenticated(Boolean(user));
-    });
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthenticated(Boolean(session?.user));
-    });
-
-    return () => subscription.unsubscribe();
+    void fetch("/api/auth/session")
+      .then((response) => response.json())
+      .then((result: { user: unknown }) =>
+        setAuthenticated(Boolean(result.user)),
+      )
+      .catch(() => setAuthenticated(false));
   }, []);
 
   return (
@@ -146,7 +141,7 @@ export function AppHeader() {
           </div>
         </Link>
         <nav className="flex items-center gap-1 rounded-full bg-muted p-1">
-          {nav.map(({ href, label, icon: Icon }) => (
+          {navigationItems.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
@@ -171,16 +166,19 @@ export function AppHeader() {
           )}
           {mounted && authenticated === true && (
             <>
-              <span className="hidden rounded-full border px-3 py-2 text-sm font-medium sm:inline">
+              <Link
+                href={dashboardHref}
+                className="hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted sm:inline-flex"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 {roles[role].short}
-              </span>
+              </Link>
               <button
                 type="button"
                 onClick={() =>
                   void (async () => {
-                    sessionStorage.removeItem("barawatch-demo-role");
-                    await createClient().auth.signOut();
-                    window.location.reload();
+                    await fetch("/api/auth/logout", { method: "POST" });
+                    window.location.assign("/");
                   })()
                 }
                 className="hidden rounded-full px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground lg:inline"

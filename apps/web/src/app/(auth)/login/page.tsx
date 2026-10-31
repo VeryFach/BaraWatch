@@ -1,12 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/browser";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -14,32 +11,35 @@ export default function LoginPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
-    const demoRoles = {
-      admin: "admin",
-      penegak: "hukum",
-      petugas: "petugas",
-    } as const;
-    const normalizedIdentifier = identifier.trim().toLowerCase();
-    const demoRole = demoRoles[normalizedIdentifier as keyof typeof demoRoles];
-    if (demoRole && password === normalizedIdentifier) {
-      sessionStorage.setItem("barawatch-demo-role", demoRole);
-      router.push("/");
-      router.refresh();
-      return;
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: identifier, password }),
+      });
+      const result = (await response.json()) as { error?: string; role?: string };
+      if (!response.ok) {
+        toast.error("Login gagal", {
+          description: result.error ?? "Email atau password salah.",
+        });
+        return;
+      }
+      if (result.role === "admin") {
+        window.location.assign("/admin");
+      } else if (result.role === "petugas") {
+        window.location.assign("/petugas");
+      } else if (result.role === "penegak_hukum") {
+        window.location.assign("/penegak-hukum");
+      } else {
+        window.location.assign("/");
+      }
+    } catch {
+      toast.error("Login gagal", {
+        description: "Server autentikasi tidak dapat dihubungi.",
+      });
+    } finally {
+      setLoading(false);
     }
-
-    const { error } = await createClient().auth.signInWithPassword({
-      email: identifier,
-      password,
-    });
-    setLoading(false);
-    if (error) {
-      toast.error("Login gagal", { description: error.message });
-      return;
-    }
-
-    router.push("/");
-    router.refresh();
   }
 
   return (
@@ -51,7 +51,7 @@ export default function LoginPage() {
         </p>
         <form onSubmit={submit} className="mt-8 space-y-4">
           <label className="block text-sm">
-            ID atau email
+            Email
             <input
               required
               type="text"
@@ -81,9 +81,6 @@ export default function LoginPage() {
             {loading ? "Memproses..." : "Masuk"}
           </button>
         </form>
-        <p className="mt-5 text-xs text-muted-foreground">
-          Demo: admin/admin, penegak/penegak, atau petugas/petugas.
-        </p>
       </div>
     </main>
   );

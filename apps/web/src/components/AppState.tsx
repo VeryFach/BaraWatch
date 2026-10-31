@@ -21,7 +21,6 @@ import {
   type Permission,
   type Role,
 } from "@/lib/roles";
-import { createClient } from "@/lib/supabase/browser";
 
 export interface Laporan {
   id: string;
@@ -75,28 +74,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    const demoRole = sessionStorage.getItem("barawatch-demo-role");
-    if (isRole(demoRole)) setRoleState(demoRole);
-    if (
-      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-      !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    )
-      return;
-    void (async () => {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
-      const role = profile?.role === "penegak_hukum" ? "hukum" : profile?.role;
-      if (isRole(role) && role !== "warga" && role !== "desa")
-        setRoleState(role);
-    })();
+    void fetch("/api/auth/session")
+      .then((response) => response.json())
+      .then((result: { profile?: { role?: string } | null }) => {
+        const role: string | null =
+          result.profile?.role === "penegak_hukum"
+            ? "hukum"
+            : (result.profile?.role ?? null);
+        if (isRole(role)) setRoleState(role);
+      });
   }, []);
 
   useEffect(() => {
