@@ -16,8 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export default function ReportsPage() {
-  const { laporan, reportsLoading, reportsError, statusOf, escalated } =
-    useApp();
+  const { laporan, reportsLoading, reportsError } = useApp();
   const [filters, setFilters] = useState<ActivityFilters>({
     query: "",
     jenis: "semua",
@@ -28,10 +27,7 @@ export default function ReportsPage() {
     urutan: "terbaru",
   });
   const [open, setOpen] = useState<string | null>(null);
-  const allActivities = useMemo(
-    () => buildActivities(laporan, statusOf, escalated),
-    [laporan, statusOf, escalated],
-  );
+  const allActivities = useMemo(() => buildActivities(laporan), [laporan]);
   const activities = useMemo(
     () => filterActivities(allActivities, filters),
     [allActivities, filters],

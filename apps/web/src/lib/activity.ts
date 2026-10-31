@@ -2,7 +2,6 @@ import type { Laporan } from "@/components/AppState";
 import {
   type Hotspot,
   type HotspotStatus,
-  hotspots,
   statusLabel,
 } from "@/lib/dummy-data";
 
@@ -57,43 +56,22 @@ export interface ActivityProgress {
   note: string;
 }
 
-export function buildActivities(
-  reports: Laporan[],
-  statusOf: (id: string) => HotspotStatus,
-  escalated: string[] = [],
-): Activity[] {
-  return [
-    ...reports.map(
-      (report): Activity => ({
-        kind: "laporan",
-        id: report.id,
-        desa: report.desa,
-        kecamatan: report.kecamatan,
-        kabupaten: report.kabupaten,
-        waktu: report.waktu,
-        title: `${report.jenis} di ${report.desa}`,
-        summary: report.catatan,
-        status: report.status,
-        report,
-        escalated: false,
-      }),
-    ),
-    ...hotspots.map(
-      (hotspot): Activity => ({
-        kind: "kejadian",
-        id: hotspot.id,
-        desa: hotspot.desa,
-        kecamatan: hotspot.kecamatan,
-        kabupaten: hotspot.kabupaten,
-        waktu: hotspot.waktu,
-        title: `Titik api di ${hotspot.desa}`,
-        summary: `${hotspot.sumber} · ${hotspot.gambut ? "Gambut" : "Mineral"}`,
-        status: statusOf(hotspot.id),
-        hotspot,
-        escalated: escalated.includes(hotspot.id),
-      }),
-    ),
-  ];
+export function buildActivities(reports: Laporan[]): Activity[] {
+  return reports.map(
+    (report): Activity => ({
+      kind: "laporan",
+      id: report.id,
+      desa: report.desa,
+      kecamatan: report.kecamatan,
+      kabupaten: report.kabupaten,
+      waktu: report.waktu,
+      title: `${report.jenis} di ${report.desa}`,
+      summary: report.catatan,
+      status: report.status,
+      report,
+      escalated: false,
+    }),
+  );
 }
 
 export function activityProgress(activity: Activity): ActivityProgress {

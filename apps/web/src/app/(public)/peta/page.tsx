@@ -3,7 +3,6 @@
 import { Camera, Filter, Flame, RotateCcw, Search } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useApp } from "@/components/AppState";
 import { ClientMap } from "@/components/ClientMap";
 import { HotspotDetails } from "@/components/HotspotDetails";
 import { SearchSelect } from "@/components/SearchSelect";
@@ -15,7 +14,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { desaList, hotspots, statusLabel } from "@/lib/dummy-data";
+import { desaList, statusLabel } from "@/lib/dummy-data";
 import {
   defaultMapFilters,
   filterHotspots,
@@ -41,10 +40,8 @@ function MapContent() {
   const router = useRouter();
   const selectedId = useSearchParams().get("id");
   const selectedReportId = useSearchParams().get("report");
-  const { statusOf } = useApp();
   const [filters, setFilters] = useState<MapFilters>(defaultMapFilters);
   const [showRisk, setShowRisk] = useState(true);
-  const [showHotspots, setShowHotspots] = useState(true);
   const [showReports, setShowReports] = useState(true);
   const [showKonsesi, setShowKonsesi] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -73,11 +70,7 @@ function MapContent() {
         setMapDataError("Data wilayah dan laporan belum dapat dimuat."),
       );
   }, []);
-  const rows = useMemo(
-    () => hotspots.map((h) => ({ ...h, status: statusOf(h.id) })),
-    [statusOf],
-  );
-  const list = filterHotspots(rows, filters);
+  const list = useMemo(() => filterHotspots([], filters), [filters]);
   const reportList = useMemo(() => {
     const query = filters.query.trim().toLowerCase();
     return reports.filter((report) => {
@@ -93,10 +86,7 @@ function MapContent() {
   }, [filters.kabupaten, filters.query, reports]);
   const districts = useMemo(
     () =>
-      [
-        ...hotspots.map((hotspot) => hotspot.kabupaten),
-        ...reports.map((report) => report.region?.parent?.name ?? ""),
-      ]
+      [...reports.map((report) => report.region?.parent?.name ?? "")]
         .filter(Boolean)
         .filter((district, index, values) => values.indexOf(district) === index)
         .sort(),
@@ -385,7 +375,7 @@ function MapContent() {
       <section className="relative order-1 min-h-[48vh] flex-1 md:order-2">
         <ClientMap
           showRisk={showRisk}
-          showHotspots={showHotspots}
+          showHotspots={false}
           showReports={showReports}
           hideFalse={filters.hideFalse}
           selectedId={selectedId}
@@ -415,15 +405,6 @@ function MapContent() {
                 }
               />
               Risiko desa
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                checked={showHotspots}
-                onCheckedChange={(v: boolean | "indeterminate") =>
-                  setShowHotspots(v === true)
-                }
-              />
-              Titik api
             </div>
             <div className="flex items-center gap-2">
               <Checkbox
