@@ -4,7 +4,11 @@ import { twilioProvider } from "./twilio";
 
 type Subscription = {
   contact_id: string;
-  contacts: { phone_e164: string; last_inbound_at: string | null } | null;
+  contacts: {
+    phone_e164: string;
+    last_inbound_at: string | null;
+    opted_out_at: string | null;
+  } | null;
   regions: { name: string } | null;
 };
 
@@ -13,7 +17,7 @@ export async function dispatchNewIncidentAlert(
   regionId: string,
 ): Promise<number> {
   const subscriptions = await supabaseRequest<Subscription[]>(
-    `subscriptions?region_id=eq.${encodeURIComponent(regionId)}&is_active=eq.true&select=contact_id,contacts(phone_e164,last_inbound_at),regions(name)`,
+    `subscriptions?region_id=eq.${encodeURIComponent(regionId)}&is_active=eq.true&select=contact_id,contacts(phone_e164,last_inbound_at,opted_out_at),regions(name)`,
   );
   const env = getServerEnv();
   let sentCount = 0;
@@ -21,6 +25,8 @@ export async function dispatchNewIncidentAlert(
     const contact = subscription.contacts;
     const regionName = subscription.regions?.name;
     if (!contact || !regionName) continue;
+    // AGENTS.md: kontak dengan opted_out_at tidak dikirimi notifikasi
+    if (contact.opted_out_at) continue;
     const dedupeKey = `${incidentId}:${subscription.contact_id}:alert`;
     const recent = contact.last_inbound_at
       ? Date.now() - Date.parse(contact.last_inbound_at) < 24 * 60 * 60 * 1000
