@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { PublicRegion } from "@/lib/public-api";
+import type { PublicRegionBoundary } from "@/lib/public-api";
 import { supabaseRequest } from "@/lib/supabase/admin";
 
 export async function GET(request: Request) {
@@ -12,8 +12,8 @@ export async function GET(request: Request) {
   ]
     .filter(Boolean)
     .join("&");
-  const regions = await supabaseRequest<PublicRegion[]>(
-    `regions?select=id,parent_id,level,code,name&order=code.asc${filters ? `&${filters}` : ""}`,
+  const regions = await supabaseRequest<PublicRegionBoundary[]>(
+    `public_regions?select=id,parent_id,level,code,name,geometry&order=code.asc${filters ? `&${filters}` : ""}`,
   );
   return NextResponse.json({ data: regions });
 }

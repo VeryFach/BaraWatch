@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import {
   CircleMarker,
@@ -18,17 +19,24 @@ import {
   riskVar,
   statusLabel,
 } from "@/lib/dummy-data";
+import type { PublicRegionBoundary, PublicReport } from "@/lib/public-api";
 
 interface Props {
   showRisk: boolean;
   showHotspots: boolean;
+  showReports?: boolean;
   hideFalse: boolean;
   selectedId?: string | null | undefined;
+  selectedReportId?: string | null | undefined;
   onSelect?: (h: Hotspot) => void;
+  onSelectReport?: (report: PublicReport) => void;
   compact?: boolean;
   showKonsesi?: boolean;
   hotspotIds?: string[];
   villageNames?: string[];
+  reports?: PublicReport[];
+  regions?: PublicRegionBoundary[];
+  regionLevels?: PublicRegionBoundary["level"][];
 }
 
 const konsesi: { nama: string; pts: [number, number][] }[] = [
@@ -75,16 +83,44 @@ function FocusHotspot({
   return null;
 }
 
+function FocusReport({ report }: { report?: PublicReport }) {
+  const map = useMap();
+  useEffect(() => {
+    if (
+      report?.latitude !== null &&
+      report?.latitude !== undefined &&
+      report.longitude !== null &&
+      report.longitude !== undefined
+    ) {
+      map.setView(
+        [report.latitude, report.longitude],
+        Math.max(map.getZoom(), 12),
+        {
+          animate: !window.matchMedia("(prefers-reduced-motion: reduce)")
+            .matches,
+        },
+      );
+    }
+  }, [map, report]);
+  return null;
+}
+
 export default function FireMap({
   showRisk,
   showHotspots,
+  showReports = true,
   hideFalse,
   selectedId,
+  selectedReportId,
   onSelect,
+  onSelectReport,
   compact,
   showKonsesi,
   hotspotIds,
   villageNames,
+  reports = [],
+  regions = [],
+  regionLevels = [],
 }: Props) {
   const { statusOf } = useApp();
   const [mapReady, setMapReady] = useState(false);
@@ -107,6 +143,9 @@ export default function FireMap({
       {mapReady && (
         <>
           <FocusHotspot selectedId={selectedId} />
+          <FocusReport
+            report={reports.find((report) => report.id === selectedReportId)}
+          />
           <TileLayer
             attribution="&copy; OpenStreetMap contributors"
             url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -126,6 +165,34 @@ export default function FireMap({
                 <Tooltip sticky>{k.nama}</Tooltip>
               </Polygon>
             ))}
+          {regions
+            .filter(
+              (region) =>
+                region.geometry !== null && regionLevels.includes(region.level),
+            )
+            .map((region) =>
+              region.geometry ? (
+                <Polygon
+                  key={region.id}
+                  positions={geoJsonToLeaflet(region.geometry)}
+                  pathOptions={{
+                    color: css(
+                      region.level === "kabupaten"
+                        ? "var(--primary)"
+                        : region.level === "kecamatan"
+                          ? "var(--forest)"
+                          : "var(--risk-medium)",
+                    ),
+                    weight: region.level === "kabupaten" ? 2 : 1,
+                    fillOpacity: 0.04,
+                  }}
+                >
+                  <Tooltip sticky>
+                    {region.level} · {region.name}
+                  </Tooltip>
+                </Polygon>
+              ) : null,
+            )}
           {showRisk &&
             desaList
               .filter((d) => !villageNames || villageNames.includes(d.nama))
@@ -177,8 +244,82 @@ export default function FireMap({
                 </CircleMarker>
               );
             })}
+          {showReports &&
+            reports
+              .filter(
+                (report) =>
+                  report.latitude !== null && report.longitude !== null,
+              )
+              .map((report) => (
+                <CircleMarker
+                  key={`report-${report.id}`}
+                  center={[
+                    report.latitude as number,
+                    report.longitude as number,
+                  ]}
+                  radius={8}
+                  eventHandlers={{
+                    click: () => onSelectReport?.(report),
+                  }}
+                  pathOptions={{
+                    color: css("var(--primary)"),
+                    fillColor: css("var(--risk-medium)"),
+                    fillOpacity: 0.95,
+                    weight: 2,
+                  }}
+                >
+                  <Popup>
+                    <div className="w-72">
+                      <strong className="text-base">Laporan warga</strong>
+                      <p className="mt-1 text-sm">
+                        {report.description ?? "Deskripsi belum tersedia"}
+                      </p>
+                      {report.region && (
+                        <p className="text-xs text-gray-500">
+                          {report.region.name}
+                          {report.region.parent
+                            ? ` · ${report.region.parent.name}`
+                            : ""}
+                        </p>
+                      )}
+                      {report.media.length > 0 && (
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          {report.media.map((media) => (
+                            <Image
+                              key={media.url}
+                              src={media.url}
+                              alt="Bukti laporan"
+                              width={240}
+                              height={180}
+                              unoptimized
+                              className="h-36 w-full rounded-lg object-cover"
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              ))}
         </>
       )}
     </MapContainer>
+  );
+}
+
+function geoJsonToLeaflet(
+  geometry: NonNullable<PublicRegionBoundary["geometry"]>,
+) {
+  if (geometry.type === "Polygon") {
+    const coordinates = geometry.coordinates as number[][][];
+    return coordinates.map((ring) =>
+      ring.map(([lng, lat]) => [lat, lng] as [number, number]),
+    );
+  }
+  const coordinates = geometry.coordinates as number[][][][];
+  return coordinates.map((polygon) =>
+    polygon.map((ring) =>
+      ring.map(([lng, lat]) => [lat, lng] as [number, number]),
+    ),
   );
 }

@@ -5,6 +5,13 @@ export type PublicRegion = Pick<
   "id" | "parent_id" | "level" | "code" | "name"
 >;
 
+export type PublicRegionBoundary = PublicRegion & {
+  geometry: {
+    type: "MultiPolygon" | "Polygon";
+    coordinates: number[][][][] | number[][][];
+  } | null;
+};
+
 export type PublicReport = Pick<
   DbReport,
   | "id"
