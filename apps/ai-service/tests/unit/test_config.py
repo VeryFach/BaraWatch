@@ -6,7 +6,7 @@ from app.core.config import Settings
 
 def test_default_settings():
     settings = Settings(_env_file=None, app_env="development", ai_internal_key="")
-    assert settings.app_version == "0.1.0"
+    assert settings.app_version == "0.2.0"
 
 
 def test_production_requires_key():
