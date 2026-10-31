@@ -8,6 +8,7 @@ export type SessionState =
   | "awaiting_photo"
   | "awaiting_location"
   | "mpa_menu"
+  | "mpa_pending_verification"
   | "mpa_filter_status"
   | "mpa_filter_region_level"
   | "mpa_filter_region"

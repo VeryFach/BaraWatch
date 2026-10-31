@@ -1,13 +1,15 @@
 import { supabaseRequest } from "@/lib/supabase/admin";
-import { getReportRegionNames } from "./reports";
-import { twilioProvider } from "./twilio";
-import type { Contact, Region } from "./types";
+import type { Contact, Region } from "../core/types";
+import { setSession } from "../data/db";
+import { getReportRegionNames } from "../reports/service";
+import { twilioProvider } from "../transport/twilio";
 
 export async function notifyMpa(
   reportId: string,
   regionId: string | null,
   latitude?: number,
   longitude?: number,
+  labels: string[] = [],
 ) {
   const regionNames = await getReportRegionNames(regionId);
   const mpas = await supabaseRequest<Contact[]>(
@@ -20,12 +22,15 @@ export async function notifyMpa(
     `🚨 Laporan baru\nID: ${reportId}\n` +
     `Wilayah: ${regionNames.desa}, ${regionNames.kecamatan}, ${regionNames.kabupaten}\n` +
     `Lokasi: ${latitude ?? "-"}, ${longitude ?? "-"}\n` +
-    "Status: Belum ditangani.\n\n" +
-    `Pilihan: *Api nyata ${reportId}* atau *Bukan api nyata ${reportId}*.\n` +
-    `(Cadangan: NILAI ${reportId} 1 atau NILAI ${reportId} 2.)\n` +
+    `Indikasi AI: ${labels.join(", ")}\n` +
+    "Status: Menunggu verifikasi lapangan.\n\n" +
+    "Balas *1* jika api nyata atau *2* jika bukan api nyata.\n" +
     "Balas *MPA* untuk membuka menu laporan.";
   await Promise.all(
     targets.map(async (mpa) => {
+      await setSession(mpa.id, "mpa_pending_verification", {
+        reportId,
+      });
       const sent = await twilioProvider.sendText(mpa.phone_e164, body);
       await supabaseRequest("wa_messages", {
         method: "POST",

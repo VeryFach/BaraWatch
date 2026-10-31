@@ -1,13 +1,27 @@
 import { getServerEnv } from "@/lib/env";
 import { supabaseRequest, uploadToSupabaseStorage } from "@/lib/supabase/admin";
-import { queryOne, setSession } from "./db";
-import type { Contact, Inbound, Session } from "./types";
+import type { Contact, Inbound, Session } from "../core/types";
+import { queryOne, setSession } from "../data/db";
+
+const VISION_LABELS = [
+  "fire",
+  "smoke_general",
+  "wildfire_smoke",
+  "industrial_smoke",
+  "fog",
+] as const;
+
+export type VisionResult = {
+  labels: string[];
+  needsReview: boolean;
+  response: Record<string, unknown>;
+};
 
 export async function downloadAndAnalyze(
   url: string,
   contentType: string,
   reportId: string,
-) {
+): Promise<{ path: string; vision: VisionResult | null }> {
   const env = getServerEnv();
   const response = await fetch(url, {
     headers: {
@@ -19,6 +33,7 @@ export async function downloadAndAnalyze(
   const body = await response.arrayBuffer();
   const path = `reports/${reportId}/${crypto.randomUUID()}.jpg`;
   await uploadToSupabaseStorage(path, body, contentType);
+  let vision: VisionResult | null = null;
   if (env.aiServiceUrl && env.aiServiceApiKey) {
     const form = new FormData();
     form.append("file", new Blob([body], { type: contentType }), "report.jpg");
@@ -29,11 +44,36 @@ export async function downloadAndAnalyze(
     });
     if (!result.ok)
       throw new Error(`Vision analysis failed (${result.status})`);
+    const response = (await result.json()) as {
+      vision?: { labels?: unknown; needs_review?: unknown };
+    };
+    const labels = Array.isArray(response.vision?.labels)
+      ? response.vision.labels.filter(
+          (label): label is string =>
+            typeof label === "string" &&
+            VISION_LABELS.includes(label as (typeof VISION_LABELS)[number]),
+        )
+      : [];
+    vision = {
+      labels,
+      needsReview: response.vision?.needs_review === true,
+      response: response as Record<string, unknown>,
+    };
   }
-  return path;
+  return { path, vision };
 }
 
 async function findRegionForPoint(latitude: number, longitude: number) {
+  if (
+    !Number.isFinite(latitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    !Number.isFinite(longitude) ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    throw new Error("Report location coordinates are invalid");
+  }
   const rows = await supabaseRequest<
     { region_id: string; region_name: string }[]
   >("rpc/region_for_point", {
@@ -77,18 +117,35 @@ export async function finishReport(
       ? session.context.mediaContentType
       : input.mediaContentType;
   if (mediaUrl && mediaType?.startsWith("image/")) {
-    const mediaPath = await downloadAndAnalyze(mediaUrl, mediaType, report.id);
+    const analysis = await downloadAndAnalyze(mediaUrl, mediaType, report.id);
     await supabaseRequest("report_media", {
       method: "POST",
       body: JSON.stringify({
         report_id: report.id,
-        storage_path: mediaPath,
+        storage_path: analysis.path,
         media_type: "image",
+        detections: analysis.vision?.response ?? null,
       }),
     });
+    if (!analysis.vision || analysis.vision.labels.length === 0) {
+      await supabaseRequest(`reports?id=eq.${encodeURIComponent(report.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "in_review",
+          verification_outcome: "uncertain",
+          updated_at: new Date().toISOString(),
+        }),
+      });
+    }
+    await setSession(contact.id, "idle");
+    return {
+      reportId: report.id,
+      regionId: report.regionId,
+      vision: analysis.vision,
+    };
   }
   await setSession(contact.id, "idle");
-  return { reportId: report.id, regionId: report.regionId };
+  return { reportId: report.id, regionId: report.regionId, vision: null };
 }
 
 export async function getReportRegionNames(regionId: string | null) {

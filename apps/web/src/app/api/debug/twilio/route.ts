@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerEnv } from "@/lib/env";
-import { testTwilioCredentials } from "@/modules/whatsapp/twilio";
+import { testTwilioCredentials } from "@/modules/whatsapp/transport/twilio";
 
 export async function GET() {
   if (!getServerEnv().twilioDebug) {

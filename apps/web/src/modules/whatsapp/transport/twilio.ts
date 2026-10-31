@@ -1,6 +1,6 @@
 import twilio from "twilio";
 import { getServerEnv } from "@/lib/env";
-import type { WhatsAppProvider } from "./provider";
+import type { WhatsAppProvider } from "../core/provider";
 
 function getClient() {
   const env = getServerEnv();

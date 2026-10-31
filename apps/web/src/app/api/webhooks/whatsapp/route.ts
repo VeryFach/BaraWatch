@@ -2,12 +2,9 @@ import { NextResponse } from "next/server";
 import twilio from "twilio";
 import { getServerEnv } from "@/lib/env";
 import { supabaseRequest } from "@/lib/supabase/admin";
-import { inboundMessageExists } from "@/modules/whatsapp/db";
+import { inboundMessageExists } from "@/modules/whatsapp/data/db";
 import { routeInbound } from "@/modules/whatsapp/router";
-import {
-  twilioProvider,
-  verifyTwilioCredentials,
-} from "@/modules/whatsapp/twilio";
+import { twilioProvider } from "@/modules/whatsapp/transport/twilio";
 
 function validTwilioSignature(
   url: string,
@@ -31,18 +28,23 @@ function numberFrom(value: string | null): number | undefined {
 }
 
 export async function POST(request: Request) {
-  const body = await request.text();
+  let body: string;
+  try {
+    body = await request.text();
+  } catch (error) {
+    if (
+      request.signal.aborted ||
+      (error instanceof Error &&
+        (error.name === "AbortError" ||
+          (error as NodeJS.ErrnoException).code === "ECONNRESET"))
+    ) {
+      console.warn("[WhatsApp webhook] request body was aborted");
+      return new NextResponse(null, { status: 204 });
+    }
+    throw error;
+  }
   const params = new URLSearchParams(body);
   const env = getServerEnv();
-  if (env.twilioDebug) {
-    try {
-      await verifyTwilioCredentials();
-    } catch {
-      console.error(
-        "[WhatsApp webhook] Twilio credential verification failed; continuing to signature validation",
-      );
-    }
-  }
   const signature = request.headers.get("x-twilio-signature");
   const signatureUrl = env.twilioWebhookUrl ?? request.url;
   const publicSignatureValid = validTwilioSignature(

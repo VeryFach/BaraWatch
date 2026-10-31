@@ -1,6 +1,6 @@
 import { supabaseRequest } from "@/lib/supabase/admin";
-import { queryOne, setSession } from "./db";
-import type { Contact, Region, Session } from "./types";
+import type { Contact, Region, Session } from "../core/types";
+import { queryOne, setSession } from "../data/db";
 
 export async function findProvince(): Promise<Region> {
   const province = await queryOne<Region>(

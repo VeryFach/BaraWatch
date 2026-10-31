@@ -1,5 +1,5 @@
 import { supabaseRequest } from "@/lib/supabase/admin";
-import type { Contact, Inbound, Session } from "./types";
+import type { Contact, Inbound, Session } from "../core/types";
 
 export async function queryOne<T>(path: string): Promise<T | null> {
   const rows = await supabaseRequest<T[]>(`${path}&limit=1`);

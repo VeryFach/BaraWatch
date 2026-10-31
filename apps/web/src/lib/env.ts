@@ -17,6 +17,7 @@ export function getServerEnv() {
     twilioDebug: process.env.TWILIO_DEBUG === "true",
     twilioAlertTemplateSid: process.env.TWILIO_ALERT_TEMPLATE_SID,
     twilioWebhookSecret: process.env.TWILIO_WEBHOOK_SECRET,
+    healthcheckKey: process.env.HEALTHCHECK_KEY,
     aiServiceUrl: process.env.AI_SERVICE_URL,
     aiServiceApiKey: process.env.AI_SERVICE_API_KEY,
     storageBucket: process.env.WHATSAPP_STORAGE_BUCKET ?? "whatsapp-reports",
