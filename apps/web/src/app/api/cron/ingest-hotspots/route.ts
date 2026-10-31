@@ -35,7 +35,10 @@ export async function GET(request: Request) {
       },
       cache: "no-store",
     });
-    if (!response.ok) throw new Error(`Supabase ${path.split("?")[0]} failed (${response.status})`);
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`Supabase ${path.split("?")[0]} failed (${response.status}): ${detail.slice(0, 500)}`);
+    }
     if (response.status === 204) return undefined as T;
     return response.json() as Promise<T>;
   };
@@ -50,7 +53,7 @@ export async function GET(request: Request) {
     if (!claim[0]?.acquired) return Response.json({ ok: true, skipped: "already_running" });
     runId = claim[0].run_id;
 
-    const settingsRows = await supabase<{ key: string; value: unknown }[]>("system_settings?select=key,value&key=in.(firms_products,dbscan_eps_km,dbscan_min_samples,cluster_window_hours)");
+    const settingsRows = await supabase<{ key: string; value: unknown }[]>("system_settings?select=key,value&key=in.(firms_products,firms_pilot_bbox,dbscan_eps_km,dbscan_min_samples,cluster_window_hours)");
     const settings = Object.fromEntries(settingsRows.map((row) => [row.key, row.value])) as Record<string, unknown>;
     const sources = Array.isArray(settings.firms_products)
       ? settings.firms_products.filter((value): value is string => typeof value === "string")
@@ -59,7 +62,13 @@ export async function GET(request: Request) {
     if (!sources.length || sources.length > 4 || sources.some((source) => !allowedSources.has(source)) || new Set(sources).size !== sources.length) {
       throw new Error("Invalid firms_products setting");
     }
-    const bbox = await rpc<number[]>("get_firms_pilot_bbox");
+    const configuredBbox = settings.firms_pilot_bbox;
+    const bbox =
+      Array.isArray(configuredBbox) &&
+      configuredBbox.length === 4 &&
+      configuredBbox.every((value) => typeof value === "number" && Number.isFinite(value))
+        ? configuredBbox
+        : await rpc<number[]>("get_firms_pilot_bbox");
     if (!Array.isArray(bbox) || bbox.length !== 4 || bbox.some((coordinate) => !Number.isFinite(coordinate)) ||
       !(bbox[0] < bbox[2] && bbox[1] < bbox[3] && bbox[0] >= -180 && bbox[2] <= 180 && bbox[1] >= -90 && bbox[3] <= 90)) {
       throw new Error("Pilot boundary is not configured");
@@ -85,7 +94,9 @@ export async function GET(request: Request) {
         errors.push(`${source}: ${error instanceof Error ? error.message : "request failed"}`);
       }
     }
-    if (errors.length === sources.length) throw new Error("All FIRMS products failed");
+    if (errors.length === sources.length) {
+      throw new Error(`All FIRMS products failed: ${errors.join("; ")}`);
+    }
 
     await rpc("annotate_hotspots", { p_run_id: runId });
     const input = await rpc<{ hotspots: Record<string, unknown>[]; open_incidents: Record<string, unknown>[] }>("get_firms_cluster_inputs", { p_run: runId });

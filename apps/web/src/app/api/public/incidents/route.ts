@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { pointCoordinates, type PublicIncident } from "@/lib/public-api";
+import type { PublicIncident } from "@/lib/public-api";
 import { supabaseRequest } from "@/lib/supabase/admin";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -12,7 +12,8 @@ interface IncidentRow {
   source: PublicIncident["source"];
   status: PublicIncident["status"];
   hotspot_count: number;
-  centroid: unknown;
+  latitude: number | null;
+  longitude: number | null;
   first_detected_at: string;
   last_detected_at: string;
   closed_at: string | null;
@@ -39,25 +40,22 @@ export async function GET(request: Request) {
       regionId ? `region_id=eq.${encodeURIComponent(regionId)}` : "",
     ].filter(Boolean).join("&");
     const rows = await supabaseRequest<IncidentRow[]>(
-      `public_incidents_v?select=id,region_id,region_code,region_name,source,status,hotspot_count,centroid,first_detected_at,last_detected_at,closed_at&order=last_detected_at.desc,id.asc&limit=${limit}&offset=${offset}${filters ? `&${filters}` : ""}`,
+      `public_incidents_v?select=id,region_id,region_code,region_name,source,status,hotspot_count,latitude,longitude,first_detected_at,last_detected_at,closed_at&order=last_detected_at.desc,id.asc&limit=${limit}&offset=${offset}${filters ? `&${filters}` : ""}`,
     );
-    const data: PublicIncident[] = rows.map((row) => {
-      const point = pointCoordinates(row.centroid);
-      return {
-        id: row.id,
-        regionId: row.region_id,
-        regionCode: row.region_code,
-        regionName: row.region_name,
-        source: row.source,
-        status: row.status,
-        hotspotCount: row.hotspot_count,
-        latitude: point?.latitude ?? null,
-        longitude: point?.longitude ?? null,
-        firstDetectedAt: row.first_detected_at,
-        lastDetectedAt: row.last_detected_at,
-        closedAt: row.closed_at,
-      };
-    });
+    const data: PublicIncident[] = rows.map((row) => ({
+      id: row.id,
+      regionId: row.region_id,
+      regionCode: row.region_code,
+      regionName: row.region_name,
+      source: row.source,
+      status: row.status,
+      hotspotCount: row.hotspot_count,
+      latitude: row.latitude,
+      longitude: row.longitude,
+      firstDetectedAt: row.first_detected_at,
+      lastDetectedAt: row.last_detected_at,
+      closedAt: row.closed_at,
+    }));
     return NextResponse.json({ data });
   } catch {
     return NextResponse.json(
