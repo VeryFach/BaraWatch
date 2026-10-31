@@ -360,16 +360,16 @@ export default function FireMap({
               key={`report-group-${first.id}`}
               position={[first.latitude, first.longitude]}
               icon={divIcon({
-                className: "",
-                html: `<span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9999px;background:${css("var(--primary)")};border:2px solid white;color:white;font-size:12px;font-weight:700;box-shadow:0 1px 5px #0005">${group.length}</span>`,
+                className: "barawatch-report-icon",
+                html: `<span class="barawatch-report-badge">${group.length}</span>`,
                 iconSize: [30, 30],
                 iconAnchor: [15, 15],
               })}
               eventHandlers={{ click: () => onSelectReport?.(first) }}
             >
-              <Popup>
-                <div className="w-72">
-                  <strong className="text-base">
+              <Popup className="barawatch-map-popup" maxWidth={340}>
+                <div className="w-72 text-foreground">
+                  <strong className="block border-b pb-2 text-base">
                     {group.length} laporan warga
                   </strong>
                   <div className="mt-2 max-h-80 space-y-3 overflow-y-auto">
@@ -381,7 +381,7 @@ export default function FireMap({
                         <p className="text-sm">
                           {report.description ?? "Deskripsi belum tersedia"}
                         </p>
-                        <p className="mt-1 text-xs text-gray-500">
+                        <p className="mt-1 text-xs text-muted-foreground">
                           {report.region?.name ?? "Wilayah belum tersedia"}
                           {report.region?.parent
                             ? ` · ${report.region.parent.name}`
