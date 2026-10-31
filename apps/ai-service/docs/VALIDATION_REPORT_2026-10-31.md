@@ -1,5 +1,7 @@
 # Laporan Validasi BaraWatch AI
 
+> **Snapshot historis, bukan hasil validasi terbaru.** Laporan ini merekam pemeriksaan deployment dan versi yang lebih lama. Pemeriksaan dokumentasi pada tanggal yang sama menjalankan 74 test (lihat [Testing](TESTING.md)), dan tidak memverifikasi ulang deployment publik. Versi pada `pyproject.toml` sekarang `0.2.0`; riwayat ketidaksesuaian versi di bawah dipertahankan sebagai catatan lama.
+
 Tanggal: 31 Oktober 2026  
 Lokasi service: `apps/ai-service`
 
