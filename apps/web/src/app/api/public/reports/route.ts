@@ -54,6 +54,7 @@ export async function GET(request: Request) {
   const data: PublicReport[] = reports.map(({ region_id, ...report }) => {
     const region = region_id ? byId.get(region_id) : undefined;
     const parent = region?.parent_id ? byId.get(region.parent_id) : undefined;
+    const district = parent?.parent_id ? byId.get(parent.parent_id) : undefined;
     return {
       ...report,
       media: mediaByReport.get(report.id) ?? [],
@@ -62,7 +63,12 @@ export async function GET(request: Request) {
             id: region.id,
             name: region.name,
             level: region.level,
-            parent: parent ? { id: parent.id, name: parent.name } : null,
+            parent: parent
+              ? { id: parent.id, name: parent.name, level: parent.level }
+              : null,
+            district: district
+              ? { id: district.id, name: district.name }
+              : null,
           }
         : null,
     };

@@ -1,8 +1,9 @@
-import Image from "next/image";
-import { useEffect, useState } from "react";
+import { divIcon } from "leaflet";
+import { useEffect, useMemo, useState } from "react";
 import {
   CircleMarker,
   MapContainer,
+  Marker,
   Polygon,
   Popup,
   TileLayer,
@@ -38,6 +39,11 @@ interface Props {
   regions?: PublicRegionBoundary[];
   regionLevels?: PublicRegionBoundary["level"][];
 }
+
+type LocatedReport = PublicReport & {
+  latitude: number;
+  longitude: number;
+};
 
 const konsesi: { nama: string; pts: [number, number][] }[] = [
   {
@@ -131,6 +137,20 @@ export default function FireMap({
         ? hotspotIds.includes(h.id)
         : !(hideFalse && h.status === "bukan-api"),
     );
+  const reportGroups = useMemo(() => {
+    const groups = new Map<string, LocatedReport[]>();
+    const locatedReports = reports.filter(
+      (report): report is LocatedReport =>
+        report.latitude !== null && report.longitude !== null,
+    );
+    for (const report of locatedReports) {
+      const key = `${report.latitude.toFixed(5)}:${report.longitude.toFixed(5)}`;
+      const group = groups.get(key) ?? [];
+      group.push(report);
+      groups.set(key, group);
+    }
+    return [...groups.values()];
+  }, [reports]);
   return (
     <MapContainer
       center={[-2.45, 114.1]}
@@ -245,62 +265,54 @@ export default function FireMap({
               );
             })}
           {showReports &&
-            reports
-              .filter(
-                (report) =>
-                  report.latitude !== null && report.longitude !== null,
-              )
-              .map((report) => (
-                <CircleMarker
-                  key={`report-${report.id}`}
-                  center={[
-                    report.latitude as number,
-                    report.longitude as number,
-                  ]}
-                  radius={8}
-                  eventHandlers={{
-                    click: () => onSelectReport?.(report),
-                  }}
-                  pathOptions={{
-                    color: css("var(--primary)"),
-                    fillColor: css("var(--risk-medium)"),
-                    fillOpacity: 0.95,
-                    weight: 2,
-                  }}
+            reportGroups.map((group) => {
+              const first = group[0];
+              if (!first) return null;
+              return (
+                <Marker
+                  key={`report-group-${first.id}`}
+                  position={[first.latitude, first.longitude]}
+                  icon={divIcon({
+                    className: "",
+                    html: `<span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9999px;background:${css("var(--primary)")};border:2px solid white;color:white;font-size:12px;font-weight:700;box-shadow:0 1px 5px #0005">${group.length}</span>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15],
+                  })}
+                  eventHandlers={{ click: () => onSelectReport?.(first) }}
                 >
                   <Popup>
                     <div className="w-72">
-                      <strong className="text-base">Laporan warga</strong>
-                      <p className="mt-1 text-sm">
-                        {report.description ?? "Deskripsi belum tersedia"}
-                      </p>
-                      {report.region && (
-                        <p className="text-xs text-gray-500">
-                          {report.region.name}
-                          {report.region.parent
-                            ? ` · ${report.region.parent.name}`
-                            : ""}
-                        </p>
-                      )}
-                      {report.media.length > 0 && (
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                          {report.media.map((media) => (
-                            <Image
-                              key={media.url}
-                              src={media.url}
-                              alt="Bukti laporan"
-                              width={240}
-                              height={180}
-                              unoptimized
-                              className="h-36 w-full rounded-lg object-cover"
-                            />
-                          ))}
-                        </div>
-                      )}
+                      <strong className="text-base">
+                        {group.length} laporan warga
+                      </strong>
+                      <div className="mt-2 space-y-2">
+                        {group.map((report) => (
+                          <div
+                            key={report.id}
+                            className="border-b pb-2 text-sm last:border-0"
+                          >
+                            <p>
+                              {report.description ?? "Deskripsi belum tersedia"}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {report.region?.name ?? "Wilayah belum tersedia"}
+                              {report.region?.parent
+                                ? ` · ${report.region.parent.name}`
+                                : ""}
+                            </p>
+                            {report.media.length > 0 && (
+                              <p className="text-xs text-primary">
+                                {report.media.length} gambar bukti
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </Popup>
-                </CircleMarker>
-              ))}
+                </Marker>
+              );
+            })}
         </>
       )}
     </MapContainer>

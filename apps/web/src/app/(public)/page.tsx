@@ -10,7 +10,7 @@ import {
   Wind,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
   Area,
@@ -340,9 +340,39 @@ function PublicDashboard() {
   const { laporan, statusOf } = useApp();
 
   const [desa, setDesa] = useState("Kalampangan");
+  const [kabupaten, setKabupaten] = useState("all");
+  const [kecamatan, setKecamatan] = useState("all");
+  const kabupatenOptions = useMemo(
+    () => [...new Set(desaList.map((item) => item.kabupaten))].sort(),
+    [],
+  );
+  const kecamatanOptions = useMemo(
+    () =>
+      [
+        ...new Set(
+          desaList
+            .filter(
+              (item) => kabupaten === "all" || item.kabupaten === kabupaten,
+            )
+            .map((item) => item.kecamatan),
+        ),
+      ].sort(),
+    [kabupaten],
+  );
+  const desaOptions = useMemo(
+    () =>
+      desaList.filter(
+        (item) =>
+          (kabupaten === "all" || item.kabupaten === kabupaten) &&
+          (kecamatan === "all" || item.kecamatan === kecamatan),
+      ),
+    [kabupaten, kecamatan],
+  );
 
   const selectedDesa =
-    desaList.find((item) => item.nama === desa) ?? desaList[0];
+    desaOptions.find((item) => item.nama === desa) ??
+    desaOptions[0] ??
+    desaList[0];
 
   if (!selectedDesa) return null;
 
@@ -411,17 +441,49 @@ function PublicDashboard() {
             Cek risiko desa
           </div>
 
-          <SearchSelect
-            labelledBy="desa-label"
-            searchPlaceholder="Cari desa..."
-            value={desa}
-            onChange={setDesa}
-            options={desaList.map((item) => ({
-              value: item.nama,
-              label: item.nama,
-            }))}
-            triggerClassName="mt-2 h-12 text-base font-medium text-foreground"
-          />
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            <SearchSelect
+              ariaLabel="Pilih kabupaten"
+              value={kabupaten}
+              onChange={(value) => {
+                setKabupaten(value);
+                setKecamatan("all");
+                setDesa("all");
+              }}
+              options={[
+                { value: "all", label: "Semua kabupaten" },
+                ...kabupatenOptions.map((value) => ({ value, label: value })),
+              ]}
+              triggerClassName="text-foreground"
+            />
+            <SearchSelect
+              ariaLabel="Pilih kecamatan"
+              value={kecamatan}
+              onChange={(value) => {
+                setKecamatan(value);
+                setDesa("all");
+              }}
+              options={[
+                { value: "all", label: "Semua kecamatan" },
+                ...kecamatanOptions.map((value) => ({ value, label: value })),
+              ]}
+              triggerClassName="text-foreground"
+            />
+            <SearchSelect
+              labelledBy="desa-label"
+              searchPlaceholder="Cari desa..."
+              value={desa}
+              onChange={setDesa}
+              options={[
+                { value: "all", label: "Semua desa" },
+                ...desaOptions.map((item) => ({
+                  value: item.nama,
+                  label: item.nama,
+                })),
+              ]}
+              triggerClassName="text-foreground"
+            />
+          </div>
 
           <div className="mt-8 flex items-center gap-5">
             <div

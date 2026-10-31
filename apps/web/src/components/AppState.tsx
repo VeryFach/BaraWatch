@@ -28,6 +28,7 @@ export interface Laporan {
   desa: string;
   jenis: "Api" | "Asap";
   catatan: string;
+  kecamatan: string;
   kabupaten: string;
   waktu: string;
   waktuIso: string;
