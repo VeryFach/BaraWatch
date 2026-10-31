@@ -11,6 +11,7 @@ services:
         required: false
     environment:
       BARAWATCH_DEVICE: cpu
+      BURN_AREA_CACHE_DIR: /tmp/barawatch-burn-area-cache
     volumes:
       - ./models/weights:/service/models/weights:ro
       - hf-cache:/opt/huggingface
