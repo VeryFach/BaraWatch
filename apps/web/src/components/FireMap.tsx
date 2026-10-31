@@ -1,3 +1,4 @@
+import { divIcon } from "leaflet";
 import Image from "next/image";
 import { useEffect, useMemo } from "react";
 import {
@@ -20,8 +21,12 @@ import {
   riskVar,
   statusLabel,
 } from "@/lib/dummy-data";
-import type { PublicRegionBoundary, PublicReport } from "@/lib/public-api";
-import type { PublicHotspot, PublicIncident } from "@/lib/public-api";
+import type {
+  PublicHotspot,
+  PublicIncident,
+  PublicRegionBoundary,
+  PublicReport,
+} from "@/lib/public-api";
 
 interface Props {
   showRisk: boolean;
@@ -87,13 +92,14 @@ function FocusHotspot({
   const map = useMap();
   useEffect(() => {
     const live = publicHotspots?.find((row) => row.id === selectedId);
-    const fixture = publicHotspots === undefined
-      ? hotspots.find((row) => row.id === selectedId)
-      : undefined;
+    const fixture =
+      publicHotspots === undefined
+        ? hotspots.find((row) => row.id === selectedId)
+        : undefined;
     const coordinates = live
-      ? [live.latitude, live.longitude] as [number, number]
+      ? ([live.latitude, live.longitude] as [number, number])
       : fixture
-        ? [fixture.lat, fixture.lng] as [number, number]
+        ? ([fixture.lat, fixture.lng] as [number, number])
         : null;
     if (coordinates)
       map.setView(coordinates, Math.max(map.getZoom(), 10), {
@@ -248,7 +254,8 @@ export default function FireMap({
               </Tooltip>
             </CircleMarker>
           ))}
-      {showHotspots && publicHotspots !== undefined &&
+      {showHotspots &&
+        publicHotspots !== undefined &&
         publicHotspots.map((h) => (
           <CircleMarker
             key={`live-hotspot-${h.id}`}
@@ -265,7 +272,10 @@ export default function FireMap({
             <Popup>
               <b>{h.regionName ?? "Hotspot FIRMS"}</b>
               <br />
-              {new Date(h.acqAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB
+              {new Date(h.acqAt).toLocaleString("id-ID", {
+                timeZone: "Asia/Jakarta",
+              })}{" "}
+              WIB
               <br />
               {h.satellite} · {h.instrument}
               <br />
@@ -274,7 +284,8 @@ export default function FireMap({
             </Popup>
           </CircleMarker>
         ))}
-      {showHotspots && publicHotspots === undefined &&
+      {showHotspots &&
+        publicHotspots === undefined &&
         list.map((h) => {
           const off = h.status === "bukan-api" || h.status === "selesai";
           const sel = selectedId === h.id;
@@ -303,13 +314,20 @@ export default function FireMap({
             </CircleMarker>
           );
         })}
-      {showHotspots && publicHotspots !== undefined &&
+      {showHotspots &&
+        publicHotspots !== undefined &&
         publicIncidents
-          .filter((incident) => incident.latitude !== null && incident.longitude !== null)
+          .filter(
+            (incident) =>
+              incident.latitude !== null && incident.longitude !== null,
+          )
           .map((incident) => (
             <CircleMarker
               key={`live-incident-${incident.id}`}
-              center={[incident.latitude as number, incident.longitude as number]}
+              center={[
+                incident.latitude as number,
+                incident.longitude as number,
+              ]}
               radius={11}
               pathOptions={{
                 color: css("var(--primary)"),
@@ -319,67 +337,79 @@ export default function FireMap({
               }}
             >
               <Popup>
-                <b>Insiden · {incident.regionName ?? "Wilayah belum tersedia"}</b>
+                <b>
+                  Insiden · {incident.regionName ?? "Wilayah belum tersedia"}
+                </b>
                 <br />
                 {incident.hotspotCount} hotspot · {incident.status}
                 <br />
-                Terakhir terdeteksi {new Date(incident.lastDetectedAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB
+                Terakhir terdeteksi{" "}
+                {new Date(incident.lastDetectedAt).toLocaleString("id-ID", {
+                  timeZone: "Asia/Jakarta",
+                })}{" "}
+                WIB
               </Popup>
             </CircleMarker>
           ))}
       {showReports &&
-        reports
-          .filter(
-            (report) => report.latitude !== null && report.longitude !== null,
-          )
-          .map((report) => (
-            <CircleMarker
-              key={`report-${report.id}`}
-              center={[report.latitude as number, report.longitude as number]}
-              radius={8}
-              eventHandlers={{
-                click: () => onSelectReport?.(report),
-              }}
-              pathOptions={{
-                color: css("var(--primary)"),
-                fillColor: css("var(--risk-medium)"),
-                fillOpacity: 0.95,
-                weight: 2,
-              }}
+        reportGroups.map((group) => {
+          const first = group[0];
+          if (!first) return null;
+          return (
+            <Marker
+              key={`report-group-${first.id}`}
+              position={[first.latitude, first.longitude]}
+              icon={divIcon({
+                className: "",
+                html: `<span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9999px;background:${css("var(--primary)")};border:2px solid white;color:white;font-size:12px;font-weight:700;box-shadow:0 1px 5px #0005">${group.length}</span>`,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15],
+              })}
+              eventHandlers={{ click: () => onSelectReport?.(first) }}
             >
               <Popup>
                 <div className="w-72">
-                  <strong className="text-base">Laporan warga</strong>
-                  <p className="mt-1 text-sm">
-                    {report.description ?? "Deskripsi belum tersedia"}
-                  </p>
-                  {report.region && (
-                    <p className="text-xs text-gray-500">
-                      {report.region.name}
-                      {report.region.parent
-                        ? ` · ${report.region.parent.name}`
-                        : ""}
-                    </p>
-                  )}
-                  {report.media.length > 0 && (
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      {report.media.map((media) => (
-                        <Image
-                          key={media.url}
-                          src={media.url}
-                          alt="Bukti laporan"
-                          width={240}
-                          height={180}
-                          unoptimized
-                          className="h-36 w-full rounded-lg object-cover"
-                        />
-                      ))}
-                    </div>
-                  )}
+                  <strong className="text-base">
+                    {group.length} laporan warga
+                  </strong>
+                  <div className="mt-2 max-h-80 space-y-3 overflow-y-auto">
+                    {group.map((report) => (
+                      <div
+                        key={report.id}
+                        className="border-b pb-3 last:border-0"
+                      >
+                        <p className="text-sm">
+                          {report.description ?? "Deskripsi belum tersedia"}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {report.region?.name ?? "Wilayah belum tersedia"}
+                          {report.region?.parent
+                            ? ` · ${report.region.parent.name}`
+                            : ""}
+                        </p>
+                        {report.media.length > 0 && (
+                          <div className="mt-2 grid grid-cols-2 gap-2">
+                            {report.media.map((media) => (
+                              <Image
+                                key={media.url}
+                                src={media.url}
+                                alt="Bukti laporan"
+                                width={240}
+                                height={160}
+                                unoptimized
+                                className="h-20 w-full rounded-md object-cover"
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </Popup>
-            </CircleMarker>
-          ))}
+            </Marker>
+          );
+        })}
     </MapContainer>
   );
 }
