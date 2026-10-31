@@ -10,7 +10,8 @@ export type SessionState =
   | "mpa_menu"
   | "mpa_filter_status"
   | "mpa_filter_region_level"
-  | "mpa_filter_region";
+  | "mpa_filter_region"
+  | "mpa_lookup_report";
 
 export type Contact = {
   id: string;

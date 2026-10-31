@@ -19,8 +19,10 @@ export const MPA_MENU =
   "1. Laporan belum ditangani\n" +
   "2. Laporan sedang ditangani\n" +
   "3. Laporan selesai\n" +
-  "4. Laporan berdasarkan wilayah\n\n" +
-  "Ketik *0* untuk kembali ke menu awal.";
+  "4. Laporan berdasarkan wilayah\n" +
+  "5. Cari laporan berdasarkan ID\n\n" +
+  "Ketik *0* untuk kembali ke menu awal.\n" +
+  "Pilihan pada notifikasi: *Api nyata* atau *Bukan api nyata*.";
 
 export function isMpa(contact: Contact): boolean {
   return contact.role === "mpa";

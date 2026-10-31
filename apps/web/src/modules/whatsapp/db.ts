@@ -66,3 +66,12 @@ export async function logInbound(contactId: string, message: Inbound) {
     }),
   });
 }
+
+export async function inboundMessageExists(
+  providerSid: string,
+): Promise<boolean> {
+  const rows = await supabaseRequest<Array<{ id: string }>>(
+    `wa_messages?provider_sid=eq.${encodeURIComponent(providerSid)}&select=id&limit=1`,
+  );
+  return rows.length > 0;
+}

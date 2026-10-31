@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import twilio from "twilio";
 import { getServerEnv } from "@/lib/env";
 import { supabaseRequest } from "@/lib/supabase/admin";
+import { inboundMessageExists } from "@/modules/whatsapp/db";
 import { routeInbound } from "@/modules/whatsapp/router";
 import {
   twilioProvider,
@@ -84,6 +85,12 @@ export async function POST(request: Request) {
       { error: "Missing Twilio message fields" },
       { status: 400 },
     );
+  if (await inboundMessageExists(messageSid)) {
+    console.log("[WhatsApp webhook] duplicate message ignored", {
+      messageSidPresent: true,
+    });
+    return new NextResponse(null, { status: 204 });
+  }
 
   const reply = await routeInbound({
     from,

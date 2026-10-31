@@ -1,7 +1,10 @@
 import { getOrCreateContact, getSession, logInbound, setSession } from "./db";
 import { HELP, isMpa, MAIN_MENU, MPA_MENU } from "./menu";
 import {
+  classifyReport,
   findRegionDescendantIds,
+  findReportById,
+  formatReportDetails,
   formatReports,
   listRegionChoices,
   listReports,
@@ -36,7 +39,54 @@ async function handleMpaCommand(contactId: string, body: string) {
     await setSession(contactId, "mpa_filter_region_level");
     return "Pilih tingkat wilayah:\n1. Kabupaten\n2. Kecamatan\n3. Desa/Kelurahan";
   }
+  if (body === "5") {
+    await setSession(contactId, "mpa_lookup_report");
+    return "Ketik ID laporan lengkap yang ingin dicari.";
+  }
   return null;
+}
+
+async function handleMpaReportLookup(contactId: string, body: string) {
+  const report = await findReportById(body.trim());
+  if (!report) return "ID laporan tidak ditemukan atau format ID tidak valid.";
+  const region = report.region_id
+    ? (await import("./reports")).getReportRegionNames(report.region_id)
+    : Promise.resolve({
+        desa: "Tidak diketahui",
+        kecamatan: "Tidak diketahui",
+        kabupaten: "Tidak diketahui",
+      });
+  const names = await region;
+  await setSession(contactId, "mpa_menu");
+  return (
+    `${formatReportDetails(report, `${names.desa}, ${names.kecamatan}, ${names.kabupaten}`)}\n\n` +
+    `Balas *NILAI ${report.id} 1* jika api nyata atau *NILAI ${report.id} 2* jika bukan api nyata.`
+  );
+}
+
+async function handleMpaClassification(contactId: string, body: string) {
+  const match =
+    body.match(/^(?:nilai\s+)?([0-9a-f-]{36})\s+([12])$/i) ??
+    body.match(/^(api nyata|bukan api nyata)\s+([0-9a-f-]{36})$/i);
+  if (!match) return null;
+  const isRealFire =
+    match[1].toLowerCase() === "api nyata"
+      ? true
+      : match[1].toLowerCase() === "bukan api nyata"
+        ? false
+        : match[2] === "1";
+  const reportId =
+    match[1].toLowerCase() === "api nyata" ||
+    match[1].toLowerCase() === "bukan api nyata"
+      ? match[2]
+      : match[1];
+  const result = await classifyReport(reportId, isRealFire, contactId);
+  if (!result) return "ID laporan tidak ditemukan.";
+  if (result.alreadyClassified)
+    return `Laporan ${reportId} sudah pernah dinilai dengan status ${result.status}.`;
+  return isRealFire
+    ? `Laporan ${reportId} ditandai sebagai api nyata dan diteruskan untuk penanganan.`
+    : `Laporan ${reportId} ditandai bukan api nyata.`;
 }
 
 async function handleMpaRegionFilter(
@@ -87,6 +137,14 @@ export async function routeInbound(message: Inbound): Promise<string> {
     return isMpa(contact) ? MPA_MENU : MAIN_MENU;
   }
   if (isMpa(contact)) {
+    const classificationResponse = await handleMpaClassification(
+      contact.id,
+      body,
+    );
+    if (classificationResponse) return classificationResponse;
+    if (session.state === "mpa_lookup_report") {
+      return handleMpaReportLookup(contact.id, body);
+    }
     if (
       session.state === "mpa_filter_region_level" ||
       session.state === "mpa_filter_region"
@@ -98,7 +156,10 @@ export async function routeInbound(message: Inbound): Promise<string> {
       );
       if (regionResponse) return regionResponse;
     }
-    if (session.state === "mpa_menu" && !["1", "2", "3", "4"].includes(body)) {
+    if (
+      session.state === "mpa_menu" &&
+      !["1", "2", "3", "4", "5"].includes(body)
+    ) {
       return MPA_MENU;
     }
     const mpaResponse = await handleMpaCommand(contact.id, body);

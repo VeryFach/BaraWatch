@@ -40,13 +40,16 @@ Jika ketiganya bertentangan, ikuti nomor yang lebih kecil, lalu laporkan ketidak
 
 ### WhatsApp
 
-- Hanya `modules/whatsapp/twilio.ts` yang boleh mengimpor SDK Twilio. Semua kode lain memakai antarmuka `WhatsAppProvider` (`sendTemplate`, `sendText`, `sendMedia`, `parseInbound`, `verifyWebhook`).
-- Webhook wajib memverifikasi `X-Twilio-Signature` dan idempotent lewat `wa_messages.provider_sid`.
-- Pesan yang kita mulai (alert, update, ringkasan risiko) memakai template yang disetujui. Teks bebas hanya boleh bila `contacts.last_inbound_at` masih dalam 24 jam.
-- `wa_messages` adalah log sekaligus outbox. Setiap notifikasi punya `dedupe_key` (insiden + kontak + jenis + versi) agar perkembangan insiden yang sama dikirim sebagai update, bukan alert baru.
-- Hormati `opted_out_at`. Jangan mengirim ke kontak yang sudah berhenti.
-- Tombol "Api nyata / Bukan" harus punya cadangan balasan teks "1" atau "2".
-- Media masuk diunduh lalu disimpan ke Supabase Storage. Jangan bergantung pada URL Twilio.
+- Hanya `apps/web/src/modules/whatsapp/twilio.ts` yang mengimpor SDK Twilio. Kode lain memakai `WhatsAppProvider` (`sendText` dan `sendTemplate`).
+- Webhook berada di `apps/web/src/app/api/webhooks/whatsapp/route.ts`, memverifikasi `X-Twilio-Signature` memakai URL publik `TWILIO_WEBHOOK_URL`, dan mengabaikan retry berdasarkan `wa_messages.provider_sid`.
+- Percakapan warga memakai state di `wa_sessions`: menu, subscription kabupaten → kecamatan → desa, laporan foto → lokasi, dan reset global dengan `0`.
+- Subscription wilayah Kalteng dimulai dari provinsi code `62`; pilihan wilayah menerima nomor urut atau nama dan menyimpan desa terpilih ke `subscriptions`.
+- Laporan warga menyimpan koordinat, mencari desa lewat RPC PostGIS `region_for_point`, menyimpan `reports.region_id`, mengunggah media ke Storage, dan memanggil FastAPI vision bila dikonfigurasi.
+- Laporan baru dikirim ke kontak `role = 'mpa'` yang `assigned_region_id`-nya sama dengan desa laporan; kontak dengan `opted_out_at` tidak dikirimi notifikasi.
+- Menu MPA mendukung daftar berdasarkan status, filter kabupaten/kecamatan/desa, pencarian UUID laporan penuh, serta penilaian `Api nyata <id>` atau `Bukan api nyata <id>` dengan fallback `NILAI <id> 1|2`.
+- Penilaian memperbarui status/verifikasi laporan dan menambahkan baris `assessments` bila laporan memiliki `incident_id`; jangan mengubah atau menghapus baris assessment lama.
+- Media masuk diunduh lalu disimpan ke Supabase Storage. Jangan bergantung pada URL Twilio setelah webhook selesai.
+- Untuk pesan proaktif di luar jendela 24 jam, gunakan Content SID template yang disetujui melalui `TWILIO_ALERT_TEMPLATE_SID`; alert warga memakai `alert_baru`. Notifikasi MPA saat ini adalah alur operasional inbound laporan dan belum memakai template khusus.
 
 ### Insiden dan data
 

@@ -11,16 +11,19 @@ export async function notifyMpa(
 ) {
   const regionNames = await getReportRegionNames(regionId);
   const mpas = await supabaseRequest<Contact[]>(
-    "contacts?role=eq.mpa&select=id,phone_e164,role,assigned_region_id,last_inbound_at",
+    "contacts?role=eq.mpa&opted_out_at=is.null&select=id,phone_e164,role,assigned_region_id,last_inbound_at",
   );
   const targets = mpas.filter(
     (mpa) => !regionId || mpa.assigned_region_id === regionId,
   );
   const body =
-    `🚨 Laporan baru #${reportId.slice(0, 8)}\n` +
+    `🚨 Laporan baru\nID: ${reportId}\n` +
     `Wilayah: ${regionNames.desa}, ${regionNames.kecamatan}, ${regionNames.kabupaten}\n` +
     `Lokasi: ${latitude ?? "-"}, ${longitude ?? "-"}\n` +
-    "Status: Belum ditangani.\nBalas *MPA* untuk membuka menu laporan.";
+    "Status: Belum ditangani.\n\n" +
+    `Pilihan: *Api nyata ${reportId}* atau *Bukan api nyata ${reportId}*.\n` +
+    `(Cadangan: NILAI ${reportId} 1 atau NILAI ${reportId} 2.)\n` +
+    "Balas *MPA* untuk membuka menu laporan.";
   await Promise.all(
     targets.map(async (mpa) => {
       const sent = await twilioProvider.sendText(mpa.phone_e164, body);
@@ -74,9 +77,90 @@ export function formatReports(
   return reports
     .map(
       (report, index) =>
-        `${index + 1}. #${report.id.slice(0, 8)} - ${report.status} - ${new Date(report.created_at).toLocaleString("id-ID")}`,
+        `${index + 1}. ${report.id} - ${report.status} - ${new Date(report.created_at).toLocaleString("id-ID")}`,
     )
     .join("\n");
+}
+
+export async function findReportById(id: string) {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      id,
+    )
+  ) {
+    return null;
+  }
+  return (
+    (
+      await supabaseRequest<
+        Array<{
+          id: string;
+          status: string;
+          created_at: string;
+          region_id: string | null;
+          contact_id: string;
+          incident_id: string | null;
+          verification_outcome: string | null;
+        }>
+      >(
+        `reports?id=eq.${encodeURIComponent(id)}&select=id,status,created_at,region_id,contact_id,incident_id,verification_outcome`,
+      )
+    )[0] ?? null
+  );
+}
+
+export async function classifyReport(
+  reportId: string,
+  isRealFire: boolean,
+  mpaContactId: string,
+) {
+  const report = await findReportById(reportId);
+  if (!report) return null;
+  if (report.verification_outcome !== null) {
+    return { report, status: report.status, alreadyClassified: true };
+  }
+  const status = isRealFire ? "verified" : "rejected";
+  await supabaseRequest(`reports?id=eq.${encodeURIComponent(reportId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      status,
+      verification_outcome: isRealFire ? "auto_pass" : "rejected",
+      updated_at: new Date().toISOString(),
+    }),
+  });
+  if (report.incident_id) {
+    await supabaseRequest("assessments", {
+      method: "POST",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({
+        incident_id: report.incident_id,
+        contact_id: mpaContactId,
+        verdict: isRealFire ? "real_fire" : "not_fire",
+        is_current: true,
+      }),
+    });
+  }
+  return { report, status, alreadyClassified: false, mpaContactId };
+}
+
+export function formatReportDetails(
+  report: {
+    id: string;
+    status: string;
+    created_at: string;
+    region_id: string | null;
+    incident_id?: string | null;
+    verification_outcome: string | null;
+  },
+  regionName: string,
+) {
+  return (
+    `ID: ${report.id}\n` +
+    `Wilayah: ${regionName}\n` +
+    `Status: ${report.status}\n` +
+    `Penilaian: ${report.verification_outcome ?? "belum dinilai"}\n` +
+    `Dibuat: ${new Date(report.created_at).toLocaleString("id-ID")}`
+  );
 }
 
 export async function listRegionChoices(level: Region["level"]) {
