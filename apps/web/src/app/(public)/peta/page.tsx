@@ -16,9 +16,9 @@ import {
 } from "@/components/ui/popover";
 import {
   desaList,
+  type Hotspot,
   hotspots,
   statusLabel,
-  type Hotspot,
 } from "@/lib/dummy-data";
 import {
   defaultMapFilters,
@@ -261,7 +261,7 @@ function MapContent() {
               <PopoverTrigger asChild>
                 <Button
                   variant={active ? "secondary" : "outline"}
-                  className="h-10 shrink-0 px-3"
+                  className="h-10 shrink-0 px-3 text-black"
                   aria-label="Filter titik api"
                 >
                   <Filter />
@@ -285,6 +285,7 @@ function MapContent() {
                   ariaLabel="Kabupaten / kota"
                   value={filters.kabupaten}
                   onChange={updateKabupaten}
+                  triggerClassName="text-black"
                   options={[
                     { value: "all", label: "Semua wilayah" },
                     ...districts.map((d) => ({ value: d, label: d })),
@@ -294,6 +295,7 @@ function MapContent() {
                   ariaLabel="Kecamatan"
                   value={filters.kecamatan}
                   onChange={updateKecamatan}
+                  triggerClassName="text-black"
                   options={[
                     { value: "all", label: "Semua kecamatan" },
                     ...kecamatans.map((kecamatan) => ({
@@ -306,6 +308,7 @@ function MapContent() {
                   ariaLabel="Desa"
                   value={filters.desa}
                   onChange={(v) => update("desa", v)}
+                  triggerClassName="text-black"
                   options={[
                     { value: "all", label: "Semua desa" },
                     ...villagesForFilter.map((desa) => ({
@@ -318,6 +321,7 @@ function MapContent() {
                   ariaLabel="Status kejadian"
                   value={filters.status}
                   onChange={(v) => update("status", v)}
+                  triggerClassName="text-black"
                   options={[
                     { value: "all", label: "Semua status" },
                     ...Object.entries(statusLabel).map(([value, label]) => ({
@@ -330,6 +334,7 @@ function MapContent() {
                   ariaLabel="Jenis lahan"
                   value={filters.lahan}
                   onChange={(v) => update("lahan", v)}
+                  triggerClassName="text-black"
                   options={[
                     { value: "all", label: "Semua lahan" },
                     { value: "gambut", label: "Gambut" },
@@ -345,7 +350,10 @@ function MapContent() {
                     }
                   />
                 </div>
-                <Button className="w-full" onClick={() => setFilterOpen(false)}>
+                <Button
+                  className="w-full text-black"
+                  onClick={() => setFilterOpen(false)}
+                >
                   Tampilkan {list.length} titik api
                 </Button>
               </PopoverContent>
