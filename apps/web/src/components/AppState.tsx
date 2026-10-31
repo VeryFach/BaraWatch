@@ -38,6 +38,7 @@ export interface Laporan {
 
 interface Ctx {
   role: Role;
+  setRole: (r: Role) => void;
   can: (p: Permission) => boolean;
   statusOf: (id: string) => HotspotStatus;
   setStatus: (id: string, s: HotspotStatus) => void;
@@ -74,6 +75,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    const demoRole = sessionStorage.getItem("barawatch-demo-role");
+    if (isRole(demoRole)) setRoleState(demoRole);
     if (
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
       !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -120,13 +123,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const setRole = (r: Role) => {
-    setRoleState(r);
-    localStorage.setItem("demo-role", r);
-  };
-
   const value: Ctx = {
     role,
+    setRole: setRoleState,
     can: (p) => canFn(role, p),
     statusOf: (id) =>
       statuses[id] ?? hotspots.find((h) => h.id === id)?.status ?? "baru",

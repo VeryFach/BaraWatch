@@ -1,4 +1,12 @@
+import { createClient } from "@supabase/supabase-js";
 import { getServerEnv } from "@/lib/env";
+
+export function createAdminClient() {
+  const env = getServerEnv();
+  return createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 type SupabaseError = { message: string; details?: string; hint?: string };
 

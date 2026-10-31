@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useApp } from "@/components/AppState";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +25,7 @@ import {
 import {
   allPermissions,
   can,
+  isRole,
   permissionLabel,
   type Role,
   roles,
@@ -100,6 +102,35 @@ export function AccessDialog() {
 
 export function AppHeader() {
   const { role } = useApp();
+  const [mounted, setMounted] = useState(false);
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+    if (isRole(sessionStorage.getItem("barawatch-demo-role"))) {
+      setAuthenticated(true);
+    }
+    if (
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ) {
+      setAuthenticated(false);
+      return;
+    }
+
+    const supabase = createClient();
+    void supabase.auth.getUser().then(({ data: { user } }) => {
+      setAuthenticated(Boolean(user));
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthenticated(Boolean(session?.user));
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   return (
     <header className="sticky top-0 z-[1000] border-b bg-card/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
@@ -128,28 +159,36 @@ export function AppHeader() {
         </nav>
         <div className="flex items-center gap-1">
           <AccessDialog />
-          <Link
-            href="/login"
-            aria-label="Masuk"
-            className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <LogIn className="h-4 w-4" />
-            <span className="hidden lg:inline">Masuk</span>
-          </Link>
-          <span className="hidden rounded-full border px-3 py-2 text-sm font-medium sm:inline">
-            {roles[role].short}
-          </span>
-          <button
-            type="button"
-            onClick={() =>
-              void createClient()
-                .auth.signOut()
-                .then(() => window.location.reload())
-            }
-            className="hidden rounded-full px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground lg:inline"
-          >
-            Keluar
-          </button>
+          {mounted && authenticated === false && (
+            <Link
+              href="/login"
+              aria-label="Masuk"
+              className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <LogIn className="h-4 w-4" />
+              <span className="hidden lg:inline">Masuk</span>
+            </Link>
+          )}
+          {mounted && authenticated === true && (
+            <>
+              <span className="hidden rounded-full border px-3 py-2 text-sm font-medium sm:inline">
+                {roles[role].short}
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  void (async () => {
+                    sessionStorage.removeItem("barawatch-demo-role");
+                    await createClient().auth.signOut();
+                    window.location.reload();
+                  })()
+                }
+                className="hidden rounded-full px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground lg:inline"
+              >
+                Keluar
+              </button>
+            </>
+          )}
         </div>
       </div>
     </header>
