@@ -23,13 +23,19 @@ const report: PublicReport = {
     {
       url: "https://example.com/report-1.jpg",
       mediaType: "image",
+      annotated: true,
     },
   ],
   region: {
     id: "desa-1",
     name: "Desa Contoh",
     level: "desa",
-    parent: { id: "kabupaten-1", name: "Kabupaten Contoh" },
+    parent: {
+      id: "kecamatan-1",
+      name: "Kecamatan Contoh",
+      level: "kecamatan",
+    },
+    district: { id: "kabupaten-1", name: "Kabupaten Contoh" },
   },
 };
 
@@ -37,6 +43,7 @@ test("maps public report data to the frontend report contract", () => {
   assert.deepEqual(reportToLaporan(report), {
     id: "report-1",
     desa: "Desa Contoh",
+    kecamatan: "Kecamatan Contoh",
     kabupaten: "Kabupaten Contoh",
     jenis: "Asap",
     catatan: "Asap tebal di dekat sekolah",

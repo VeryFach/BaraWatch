@@ -47,12 +47,7 @@ interface Ctx {
   laporan: Laporan[];
   reportsLoading: boolean;
   reportsError: string | null;
-  addLaporan: (
-    l: Omit<
-      Laporan,
-      "id" | "waktu" | "waktuIso" | "skorAI" | "status" | "imageUrl"
-    >,
-  ) => void;
+  refreshReports: () => Promise<void>;
   setLaporanStatus: (id: string, s: Laporan["status"]) => void;
   ownershipReviews: OwnershipReviews;
   reviewOwnership: (
@@ -85,6 +80,21 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         if (isRole(role)) setRoleState(role);
       });
   }, []);
+
+  const refreshReports = async () => {
+    setReportsLoading(true);
+    setReportsError(null);
+    try {
+      const response = await fetch("/api/public/reports");
+      if (!response.ok) throw new Error("Unable to load reports");
+      const { data } = (await response.json()) as { data: PublicReport[] };
+      setLaporan(data.map(reportToLaporan));
+    } catch {
+      setReportsError("Laporan belum dapat dimuat.");
+    } finally {
+      setReportsLoading(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -122,21 +132,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     laporan,
     reportsLoading,
     reportsError,
-    addLaporan: (l) => {
-      const now = new Date();
-      setLaporan((p) => [
-        {
-          ...l,
-          id: `local-${crypto.randomUUID()}`,
-          waktu: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
-          waktuIso: now.toISOString(),
-          skorAI: Math.round((0.4 + Math.random() * 0.55) * 100) / 100,
-          status: "menunggu",
-          imageUrl: null,
-        },
-        ...p,
-      ]);
-    },
+    refreshReports,
     setLaporanStatus: (id, s) =>
       setLaporan((p) => p.map((l) => (l.id === id ? { ...l, status: s } : l))),
     ownershipReviews,
