@@ -20,6 +20,7 @@ import {
   type Permission,
   type Role,
 } from "@/lib/roles";
+import { createClient } from "@/lib/supabase/browser";
 
 export interface Laporan {
   id: string;
@@ -33,7 +34,6 @@ export interface Laporan {
 
 interface Ctx {
   role: Role;
-  setRole: (r: Role) => void;
   can: (p: Permission) => boolean;
   statusOf: (id: string) => HotspotStatus;
   setStatus: (id: string, s: HotspotStatus) => void;
@@ -65,18 +65,30 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    const saved = localStorage.getItem("demo-role");
-    if (isRole(saved)) setRoleState(saved);
+    if (
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    )
+      return;
+    void (async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+      const role = profile?.role === "penegak_hukum" ? "hukum" : profile?.role;
+      if (isRole(role) && role !== "warga" && role !== "desa")
+        setRoleState(role);
+    })();
   }, []);
-
-  const setRole = (r: Role) => {
-    setRoleState(r);
-    localStorage.setItem("demo-role", r);
-  };
 
   const value: Ctx = {
     role,
-    setRole,
     can: (p) => canFn(role, p),
     statusOf: (id) =>
       statuses[id] ?? hotspots.find((h) => h.id === id)?.status ?? "baru",
