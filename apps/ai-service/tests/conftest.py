@@ -1,11 +1,11 @@
 import pytest
-
 from fastapi.testclient import TestClient
 
-from app.main import app
 from app.core.config import Settings, get_settings
+from app.main import app
 
 TEST_INTERNAL_KEY = "a" * 40
+
 
 @pytest.fixture
 def client():

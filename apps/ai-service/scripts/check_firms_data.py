@@ -1,6 +1,6 @@
-from pathlib import Path
 import csv
 from collections import Counter
+from pathlib import Path
 
 CSV_PATH = Path("data/raw/firms_last_download.csv")
 

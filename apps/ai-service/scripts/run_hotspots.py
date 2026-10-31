@@ -1,16 +1,12 @@
 import argparse
 import json
-import os
-
 from pathlib import Path
 
-from app.schemas.clustering import ClusterRequest
 from app.core.config import get_settings
-
+from app.schemas.clustering import ClusterRequest
 from app.services.clustering.dbscan import (
     cluster_hotspots,
 )
-
 from app.services.firms import (
     download_firms_csv,
     parse_firms_csv,

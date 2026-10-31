@@ -25,14 +25,12 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8,<10",
-    "httpx>=0.27,<1.0",
     "ruff>=0.8,<1.0",
 ]
 # Instal dependensi modul AI tambahan hanya saat modul tersebut dikembangkan.
 clustering = ["pandas>=2.2,<3"]
 geo = ["shapely>=2,<3", "geopandas>=1,<2", "pyproj>=3.6,<4"]
 earth = ["earthengine-api>=1,<2"]
-vision = ["ultralytics>=8,<9", "pillow>=10,<12"]
 risk = ["xgboost>=2,<4"]
 
 [tool.setuptools.packages.find]

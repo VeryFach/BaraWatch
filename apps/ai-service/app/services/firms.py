@@ -1,13 +1,11 @@
 import csv
 import hashlib
 import io
-
 from datetime import datetime, timezone
 
 import httpx
 
 from app.schemas.clustering import Hotspot
-
 
 API_ROOT = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
 

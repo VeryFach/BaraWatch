@@ -1,5 +1,6 @@
 from app.services.firms import parse_firms_csv
 
+
 def test_csv_with_bom():
     csv_content = (
         "\ufefflatitude,longitude,acq_date,"

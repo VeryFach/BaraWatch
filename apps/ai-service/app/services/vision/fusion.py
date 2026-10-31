@@ -1,3 +1,4 @@
+
 def maximum_score(detections, label):
     return max(
         (

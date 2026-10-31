@@ -1,6 +1,9 @@
+from fastapi import APIRouter, Depends
+
 from app.core.config import Settings, get_settings
 
 router = APIRouter(tags=["System"])
+
 
 @router.get("/health")
 def health(

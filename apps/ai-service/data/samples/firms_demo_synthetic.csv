@@ -1,4 +1,4 @@
-latitude,longitude,acq_date,acq_time,satellite,instrument,confidence,frp
+﻿latitude,longitude,acq_date,acq_time,satellite,instrument,confidence,frp
 -2.2000,113.9000,2026-10-30,0300,N20,VIIRS,h,12.0
 -2.2020,113.9010,2026-10-30,0305,N20,VIIRS,n,8.5
 -2.2025,113.9020,2026-10-30,0306,N20,VIIRS,n,7.2

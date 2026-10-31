@@ -1,9 +1,12 @@
+from fastapi import APIRouter, Depends
+
 from app.core.security import require_internal_key
 
 router = APIRouter(
     prefix="/v1",
     tags=["System"],
 )
+
 
 @router.get(
     "/ping",

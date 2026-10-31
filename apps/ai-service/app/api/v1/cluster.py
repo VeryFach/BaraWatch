@@ -7,7 +7,6 @@ from app.schemas.clustering import (
 )
 from app.services.clustering.dbscan import cluster_hotspots
 
-
 router = APIRouter(
     prefix="/v1",
     tags=["Hotspot Intelligence"],
@@ -29,3 +28,4 @@ def cluster(payload: ClusterRequest):
             status_code=422,
             detail=str(exc),
         ) from exc
+        
