@@ -387,9 +387,9 @@ export default function FireMap({
                             ? ` · ${report.region.parent.name}`
                             : ""}
                         </p>
-                        {report.media.length > 0 && (
+                        {report.media.some((media) => media.annotated) && (
                           <div className="mt-2 grid grid-cols-2 gap-2">
-                            {report.media.map((media) => (
+                            {report.media.filter((media) => media.annotated).map((media) => (
                               <Image
                                 key={media.url}
                                 src={media.url}

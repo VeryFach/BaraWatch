@@ -112,6 +112,7 @@ export type PublicReport = Pick<
   media: {
     url: string;
     mediaType: "image" | "video";
+    annotated: boolean;
   }[];
   region: {
     id: string;
@@ -175,6 +176,6 @@ export function reportToLaporan(report: PublicReport) {
           ? ("ditolak" as const)
           : ("menunggu" as const),
     imageUrl:
-      report.media.find((media) => media.mediaType === "image")?.url ?? null,
+      report.media.find((media) => media.mediaType === "image" && media.annotated)?.url ?? null,
   };
 }

@@ -23,6 +23,7 @@ const report: PublicReport = {
     {
       url: "https://example.com/report-1.jpg",
       mediaType: "image",
+      annotated: true,
     },
   ],
   region: {

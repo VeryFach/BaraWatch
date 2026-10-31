@@ -33,9 +33,10 @@ export async function GET(request: Request) {
           report_id: string;
           storage_path: string;
           media_type: "image" | "video";
+          detections: unknown;
         }[]
       >(
-        `report_media?select=report_id,storage_path,media_type&report_id=in.(${reportIds.join(",")})&order=created_at.asc`,
+        `report_media?select=report_id,storage_path,media_type,detections&report_id=in.(${reportIds.join(",")})&order=created_at.asc`,
       )
     : [];
   const mediaByReport = new Map<string, PublicReport["media"]>();
@@ -44,6 +45,11 @@ export async function GET(request: Request) {
     reportMedia.push({
       url: await createSupabaseStorageSignedUrl(item.storage_path),
       mediaType: item.media_type,
+      annotated:
+        item.detections !== null &&
+        typeof item.detections === "object" &&
+        !Array.isArray(item.detections) &&
+        (item.detections as { annotated?: unknown }).annotated === true,
     });
     mediaByReport.set(item.report_id, reportMedia);
   }
