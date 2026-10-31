@@ -23,3 +23,13 @@ export function getServerEnv() {
     storageBucket: process.env.WHATSAPP_STORAGE_BUCKET ?? "whatsapp-reports",
   };
 }
+
+export function getPipelineEnv() {
+  return {
+    supabaseUrl: required("NEXT_PUBLIC_SUPABASE_URL"),
+    supabaseServiceRoleKey: required("SUPABASE_SECRET_KEY"),
+    aiServiceUrl: required("AI_SERVICE_URL"),
+    aiInternalKey: required("AI_INTERNAL_KEY"),
+    cronSecret: required("CRON_SECRET"),
+  };
+}

@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
   CircleMarker,
   MapContainer,
@@ -123,7 +123,6 @@ export default function FireMap({
   regionLevels = [],
 }: Props) {
   const { statusOf } = useApp();
-  const [mapReady, setMapReady] = useState(false);
   const list = hotspots
     .map((h) => ({ ...h, status: statusOf(h.id) }))
     .filter((h) =>
@@ -138,171 +137,162 @@ export default function FireMap({
       scrollWheelZoom={!compact}
       zoomControl={!compact}
       className="h-full w-full z-0"
-      whenReady={() => setMapReady(true)}
     >
-      {mapReady && (
-        <>
-          <FocusHotspot selectedId={selectedId} />
-          <FocusReport
-            report={reports.find((report) => report.id === selectedReportId)}
-          />
-          <TileLayer
-            attribution="&copy; OpenStreetMap contributors"
-            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          {showKonsesi &&
-            konsesi.map((k) => (
-              <Polygon
-                key={k.nama}
-                positions={k.pts}
-                pathOptions={{
-                  color: css("var(--forest)"),
-                  dashArray: "6 6",
-                  weight: 2,
-                  fillOpacity: 0.08,
-                }}
-              >
-                <Tooltip sticky>{k.nama}</Tooltip>
-              </Polygon>
-            ))}
-          {regions
-            .filter(
-              (region) =>
-                region.geometry !== null && regionLevels.includes(region.level),
-            )
-            .map((region) =>
-              region.geometry ? (
-                <Polygon
-                  key={region.id}
-                  positions={geoJsonToLeaflet(region.geometry)}
-                  pathOptions={{
-                    color: css(
-                      region.level === "kabupaten"
-                        ? "var(--primary)"
-                        : region.level === "kecamatan"
-                          ? "var(--forest)"
-                          : "var(--risk-medium)",
-                    ),
-                    weight: region.level === "kabupaten" ? 2 : 1,
-                    fillOpacity: 0.04,
-                  }}
-                >
-                  <Tooltip sticky>
-                    {region.level} · {region.name}
-                  </Tooltip>
-                </Polygon>
-              ) : null,
-            )}
-          {showRisk &&
-            desaList
-              .filter((d) => !villageNames || villageNames.includes(d.nama))
-              .map((d) => (
-                <CircleMarker
-                  key={d.nama}
-                  center={[d.lat, d.lng]}
-                  radius={compact ? 16 : 26}
-                  pathOptions={{
-                    color: css(riskVar[d.risk]),
-                    fillColor: css(riskVar[d.risk]),
-                    fillOpacity: 0.22,
-                    weight: 1,
-                  }}
-                >
-                  <Tooltip>
-                    <b>{d.nama}</b> · Risiko {riskLabel[d.risk]}
-                    <br />
-                    {d.alasan}
-                  </Tooltip>
-                </CircleMarker>
-              ))}
-          {showHotspots &&
-            list.map((h) => {
-              const off = h.status === "bukan-api" || h.status === "selesai";
-              const sel = selectedId === h.id;
-              return (
-                <CircleMarker
-                  key={h.id}
-                  center={[h.lat, h.lng]}
-                  radius={sel ? 11 : 7}
-                  eventHandlers={{ click: () => onSelect?.(h) }}
-                  pathOptions={{
-                    color: css("var(--map-marker-stroke)"),
-                    weight: 2,
-                    fillColor: off
-                      ? css("var(--map-marker-inactive)")
-                      : css("var(--risk-extreme)"),
-                    fillOpacity: 1,
-                  }}
-                >
-                  {!onSelect && (
-                    <Popup>
-                      <b>{h.desa}</b> — {statusLabel[h.status]}
-                      <br />
-                      Confidence {h.confidence}% · {h.waktu}
-                    </Popup>
+      <FocusHotspot selectedId={selectedId} />
+      <FocusReport
+        report={reports.find((report) => report.id === selectedReportId)}
+      />
+      <TileLayer
+        attribution="&copy; OpenStreetMap contributors"
+        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
+      {showKonsesi &&
+        konsesi.map((k) => (
+          <Polygon
+            key={k.nama}
+            positions={k.pts}
+            pathOptions={{
+              color: css("var(--forest)"),
+              dashArray: "6 6",
+              weight: 2,
+              fillOpacity: 0.08,
+            }}
+          >
+            <Tooltip sticky>{k.nama}</Tooltip>
+          </Polygon>
+        ))}
+      {regions
+        .filter(
+          (region) =>
+            region.geometry !== null && regionLevels.includes(region.level),
+        )
+        .map((region) =>
+          region.geometry ? (
+            <Polygon
+              key={region.id}
+              positions={geoJsonToLeaflet(region.geometry)}
+              pathOptions={{
+                color: css(
+                  region.level === "kabupaten"
+                    ? "var(--primary)"
+                    : region.level === "kecamatan"
+                      ? "var(--forest)"
+                      : "var(--risk-medium)",
+                ),
+                weight: region.level === "kabupaten" ? 2 : 1,
+                fillOpacity: 0.04,
+              }}
+            >
+              <Tooltip sticky>
+                {region.level} · {region.name}
+              </Tooltip>
+            </Polygon>
+          ) : null,
+        )}
+      {showRisk &&
+        desaList
+          .filter((d) => !villageNames || villageNames.includes(d.nama))
+          .map((d) => (
+            <CircleMarker
+              key={d.nama}
+              center={[d.lat, d.lng]}
+              radius={compact ? 16 : 26}
+              pathOptions={{
+                color: css(riskVar[d.risk]),
+                fillColor: css(riskVar[d.risk]),
+                fillOpacity: 0.22,
+                weight: 1,
+              }}
+            >
+              <Tooltip>
+                <b>{d.nama}</b> · Risiko {riskLabel[d.risk]}
+                <br />
+                {d.alasan}
+              </Tooltip>
+            </CircleMarker>
+          ))}
+      {showHotspots &&
+        list.map((h) => {
+          const off = h.status === "bukan-api" || h.status === "selesai";
+          const sel = selectedId === h.id;
+          return (
+            <CircleMarker
+              key={h.id}
+              center={[h.lat, h.lng]}
+              radius={sel ? 11 : 7}
+              eventHandlers={{ click: () => onSelect?.(h) }}
+              pathOptions={{
+                color: css("var(--map-marker-stroke)"),
+                weight: 2,
+                fillColor: off
+                  ? css("var(--map-marker-inactive)")
+                  : css("var(--risk-extreme)"),
+                fillOpacity: 1,
+              }}
+            >
+              {!onSelect && (
+                <Popup>
+                  <b>{h.desa}</b> — {statusLabel[h.status]}
+                  <br />
+                  Confidence {h.confidence}% · {h.waktu}
+                </Popup>
+              )}
+            </CircleMarker>
+          );
+        })}
+      {showReports &&
+        reports
+          .filter(
+            (report) => report.latitude !== null && report.longitude !== null,
+          )
+          .map((report) => (
+            <CircleMarker
+              key={`report-${report.id}`}
+              center={[report.latitude as number, report.longitude as number]}
+              radius={8}
+              eventHandlers={{
+                click: () => onSelectReport?.(report),
+              }}
+              pathOptions={{
+                color: css("var(--primary)"),
+                fillColor: css("var(--risk-medium)"),
+                fillOpacity: 0.95,
+                weight: 2,
+              }}
+            >
+              <Popup>
+                <div className="w-72">
+                  <strong className="text-base">Laporan warga</strong>
+                  <p className="mt-1 text-sm">
+                    {report.description ?? "Deskripsi belum tersedia"}
+                  </p>
+                  {report.region && (
+                    <p className="text-xs text-gray-500">
+                      {report.region.name}
+                      {report.region.parent
+                        ? ` · ${report.region.parent.name}`
+                        : ""}
+                    </p>
                   )}
-                </CircleMarker>
-              );
-            })}
-          {showReports &&
-            reports
-              .filter(
-                (report) =>
-                  report.latitude !== null && report.longitude !== null,
-              )
-              .map((report) => (
-                <CircleMarker
-                  key={`report-${report.id}`}
-                  center={[
-                    report.latitude as number,
-                    report.longitude as number,
-                  ]}
-                  radius={8}
-                  eventHandlers={{
-                    click: () => onSelectReport?.(report),
-                  }}
-                  pathOptions={{
-                    color: css("var(--primary)"),
-                    fillColor: css("var(--risk-medium)"),
-                    fillOpacity: 0.95,
-                    weight: 2,
-                  }}
-                >
-                  <Popup>
-                    <div className="w-72">
-                      <strong className="text-base">Laporan warga</strong>
-                      <p className="mt-1 text-sm">
-                        {report.description ?? "Deskripsi belum tersedia"}
-                      </p>
-                      {report.region && (
-                        <p className="text-xs text-gray-500">
-                          {report.region.name}
-                          {report.region.parent
-                            ? ` · ${report.region.parent.name}`
-                            : ""}
-                        </p>
-                      )}
-                      {report.media.length > 0 && (
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                          {report.media.map((media) => (
-                            <Image
-                              key={media.url}
-                              src={media.url}
-                              alt="Bukti laporan"
-                              width={240}
-                              height={180}
-                              unoptimized
-                              className="h-36 w-full rounded-lg object-cover"
-                            />
-                          ))}
-                        </div>
-                      )}
+                  {report.media.length > 0 && (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {report.media.map((media) => (
+                        <Image
+                          key={media.url}
+                          src={media.url}
+                          alt="Bukti laporan"
+                          width={240}
+                          height={180}
+                          unoptimized
+                          className="h-36 w-full rounded-lg object-cover"
+                        />
+                      ))}
                     </div>
-                  </Popup>
-                </CircleMarker>
-              ))}
-        </>
-      )}
+                  )}
+                </div>
+              </Popup>
+            </CircleMarker>
+          ))}
     </MapContainer>
   );
 }
