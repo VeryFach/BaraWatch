@@ -32,6 +32,8 @@ test("unauthenticated public reports response excludes private report data", asy
           : input.url,
     );
     if (url.pathname === "/rest/v1/report_media") return Response.json([]);
+    if (url.pathname === "/rest/v1/reports")
+      return Response.json([{ id: "report-public", region_id: null }]);
     assert.equal(url.pathname, "/rest/v1/public_reports_v");
     assert.equal(
       url.searchParams.get("select"),
@@ -77,7 +79,7 @@ test("unauthenticated public reports response excludes private report data", asy
       ),
     );
     assert.equal(regionFiltered.status, 400);
-    assert.equal(supabaseFetchCount, 2);
+    assert.equal(supabaseFetchCount, 3);
   } finally {
     globalThis.fetch = originalFetch;
     for (const key of envKeys) {
@@ -129,6 +131,36 @@ test("public reports exposes legacy annotated media while report is pending revi
         },
       ]);
     }
+    if (url.pathname.endsWith("/reports")) {
+      return Response.json([
+        {
+          id: "report-verified",
+          region_id: "region-village",
+        },
+      ]);
+    }
+    if (url.pathname.endsWith("/public_regions")) {
+      return Response.json([
+        {
+          id: "region-village",
+          parent_id: "region-subdistrict",
+          level: "desa",
+          name: "Desa Api",
+        },
+        {
+          id: "region-subdistrict",
+          parent_id: "region-district",
+          level: "kecamatan",
+          name: "Kecamatan Api",
+        },
+        {
+          id: "region-district",
+          parent_id: null,
+          level: "kabupaten",
+          name: "Kabupaten Api",
+        },
+      ]);
+    }
     if (url.pathname.endsWith("/report_media")) {
       return Response.json([
         {
@@ -170,6 +202,17 @@ test("public reports exposes legacy annotated media while report is pending revi
         annotated: true,
       },
     ]);
+    assert.deepEqual(report.region, {
+      id: "region-village",
+      name: "Desa Api",
+      level: "desa",
+      parent: {
+        id: "region-subdistrict",
+        name: "Kecamatan Api",
+        level: "kecamatan",
+      },
+      district: { id: "region-district", name: "Kabupaten Api" },
+    });
   } finally {
     globalThis.fetch = originalFetch;
     for (const key of envKeys) {

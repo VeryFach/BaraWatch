@@ -22,6 +22,18 @@ interface PublicReportRow {
   approx_geom: unknown;
 }
 
+interface ReportRegionRow {
+  id: string;
+  region_id: string | null;
+}
+
+interface RegionNameRow {
+  id: string;
+  parent_id: string | null;
+  level: "provinsi" | "kabupaten" | "kecamatan" | "desa";
+  name: string;
+}
+
 /** PostgREST returns PostGIS geometry as EWKB hex unless a view casts it. */
 function approximateCoordinates(value: unknown): {
   latitude: number;
@@ -105,6 +117,20 @@ export async function GET(request: Request) {
     `public_reports_v?select=id,incident_id,status,created_at,approx_geom&order=created_at.desc&limit=${limit}${filter}`,
   );
   const imageEligibleIds = reports.map((report) => report.id);
+  const reportRegions = imageEligibleIds.length
+    ? await supabaseRequest<ReportRegionRow[]>(
+        `reports?select=id,region_id&id=in.(${imageEligibleIds.join(",")})`,
+      )
+    : [];
+  const regions = reportRegions.some((report) => report.region_id)
+    ? await supabaseRequest<RegionNameRow[]>(
+        "public_regions?select=id,parent_id,level,name&limit=10000",
+      )
+    : [];
+  const regionById = new Map(regions.map((region) => [region.id, region]));
+  const regionIdByReport = new Map(
+    reportRegions.map((report) => [report.id, report.region_id]),
+  );
   const media = imageEligibleIds.length
     ? await supabaseRequest<ReportMediaRow[]>(
         `report_media?select=report_id,storage_path,media_type,detections&media_type=eq.image&report_id=in.(${imageEligibleIds.join(",")})&order=created_at.asc`,
@@ -131,6 +157,14 @@ export async function GET(request: Request) {
   }
   const data: PublicReport[] = reports.map((report) => {
     const coordinates = approximateCoordinates(report.approx_geom);
+    const regionId = regionIdByReport.get(report.id);
+    const region = regionId ? regionById.get(regionId) : undefined;
+    const parent = region?.parent_id
+      ? regionById.get(region.parent_id)
+      : undefined;
+    const district = parent?.parent_id
+      ? regionById.get(parent.parent_id)
+      : undefined;
     return {
       id: report.id,
       incident_id: report.incident_id,
@@ -145,7 +179,17 @@ export async function GET(request: Request) {
       verification_score: null,
       updated_at: null,
       media: mediaByReport.get(report.id) ?? [],
-      region: null,
+      region: region
+        ? {
+            id: region.id,
+            name: region.name,
+            level: region.level,
+            parent: parent
+              ? { id: parent.id, name: parent.name, level: parent.level }
+              : null,
+            district: district ? { id: district.id, name: district.name } : null,
+          }
+        : null,
     };
   });
   return NextResponse.json({ data });

@@ -90,6 +90,7 @@ export async function createPublicReport(input: CreatePublicReportInput) {
     headers: { Prefer: "return=representation" },
     body: JSON.stringify({
       contact_id: contactId,
+      region_id: input.regionId,
       geom: {
         type: "Point",
         coordinates: [input.longitude, input.latitude],

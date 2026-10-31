@@ -79,6 +79,7 @@ test("public report submission stores contact, precise location, and report serv
     );
     assert.deepEqual(reportInsert?.body, {
       contact_id: contactId,
+      region_id: regionId,
       geom: { type: "Point", coordinates: [113.9, -2.2] },
       observed_at: (reportInsert?.body as { observed_at: string }).observed_at,
       description: "Api: Asap terlihat dari kebun.",
