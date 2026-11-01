@@ -2,7 +2,8 @@
 
 import { ChevronDown, Flame, Megaphone, Search } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { ActivityProgress } from "@/components/ActivityProgress";
 import { useApp } from "@/components/AppState";
 import { ReportDialog } from "@/components/ReportDialog";
@@ -15,8 +16,9 @@ import {
 } from "@/lib/activity";
 import { cn } from "@/lib/utils";
 
-export default function ReportsPage() {
+function ReportsPageContent() {
   const { laporan, reportsLoading, reportsError } = useApp();
+  const searchParams = useSearchParams();
   const [filters, setFilters] = useState<ActivityFilters>({
     query: "",
     jenis: "semua",
@@ -28,10 +30,19 @@ export default function ReportsPage() {
   });
   const [open, setOpen] = useState<string | null>(null);
   const allActivities = useMemo(() => buildActivities(laporan), [laporan]);
+  const linkedReportId = searchParams.get("report_id");
   const activities = useMemo(
     () => filterActivities(allActivities, filters),
     [allActivities, filters],
   );
+  useEffect(() => {
+    if (
+      linkedReportId &&
+      allActivities.some((activity) => activity.id === linkedReportId)
+    ) {
+      setOpen(linkedReportId);
+    }
+  }, [allActivities, linkedReportId]);
   const districts = [...new Set(allActivities.map((a) => a.kabupaten))];
   const kecamatans = [
     ...new Set(
@@ -185,6 +196,14 @@ export default function ReportsPage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function ReportsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ReportsPageContent />
+    </Suspense>
   );
 }
 

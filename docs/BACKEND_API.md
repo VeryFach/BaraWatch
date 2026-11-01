@@ -18,6 +18,7 @@ token Twilio, `AI_INTERNAL_KEY`, atau `BARAWATCH_AI_API_KEY` dari browser.
 |---|---|---|---|
 | GET | `/api` | Publik | Health sederhana |
 | GET | `/api/health/connections` | `X-Healthcheck-Key` | Cek koneksi backend |
+| GET | `/api/webhooks/health` | `X-Healthcheck-Key` | Cek kredensial dan status Twilio |
 | GET | `/api/public/hotspots` | Publik | Hotspot FIRMS tersaring dari Supabase |
 | GET | `/api/public/incidents` | Publik | Insiden aktif dari Supabase |
 | GET | `/api/public/risk` | Publik | Skor risiko terbaru dari Supabase |
@@ -33,12 +34,14 @@ token Twilio, `AI_INTERNAL_KEY`, atau `BARAWATCH_AI_API_KEY` dari browser.
 | GET | `/api/ops/incidents` | Petugas/Admin | Daftar insiden aktif dalam wilayah kerja |
 | PATCH | `/api/ops/incidents` | Petugas/Admin | Memperbarui status operasional dan membuat log |
 | POST | `/api/webhooks/whatsapp` | `X-Twilio-Signature` | Webhook inbound Twilio |
+| POST | `/api/webhooks/whatsapp/status` | `X-Twilio-Signature` | Callback status outbound Twilio |
 | GET | `/api/debug/twilio` | `TWILIO_DEBUG=true` | Tes kredensial Twilio |
+| POST | `/api/debug/dummy-report` | `Bearer CRON_SECRET` | Membuat laporan uji berbasis foto contoh dan mengantrekan notifikasi MPA |
 | GET | `/api/cron/ingest-hotspots` | `Bearer CRON_SECRET` | FIRMS → DBSCAN → Supabase |
 | GET | `/api/cron/fetch-support-data` | Belum diterapkan | Scaffold |
 | GET | `/api/cron/weekly-risk` | `Bearer CRON_SECRET` | Hotspot mingguan → AI risk → `risk_scores` |
 | POST | `/api/internal/burn-area` | `Bearer CRON_SECRET` | AI dNBR → `burn_area_reports` |
-| GET | `/api/cron/flush-outbox` | Belum diterapkan | Scaffold |
+| GET | `/api/cron/flush-outbox` | `CRON_SECRET` | Mengirim outbox queued/failed dan menjadwalkan retry |
 
 ### FastAPI AI service
 
@@ -99,6 +102,17 @@ Invoke-RestMethod `
 ```
 
 Endpoint ini tidak mengembalikan secret.
+
+### `GET /api/webhooks/health`
+
+Endpoint ini memeriksa kredensial dan status akun Twilio. Gunakan path
+`/api/webhooks/health` (bukan `/api/webhoooks/health`) dan kirim header:
+
+```text
+X-Healthcheck-Key: <HEALTHCHECK_KEY>
+```
+
+Tanpa header atau key yang salah, endpoint mengembalikan HTTP `401`.
 
 ## Web API
 
