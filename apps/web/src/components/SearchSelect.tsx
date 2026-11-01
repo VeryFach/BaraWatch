@@ -32,6 +32,7 @@ export function SearchSelect({
   contentClassName,
   align = "start",
   onOpenChange,
+  disabled = false,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -45,6 +46,7 @@ export function SearchSelect({
   contentClassName?: string;
   align?: "start" | "center" | "end";
   onOpenChange?: (open: boolean) => void;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((option) => option.value === value);
@@ -59,12 +61,14 @@ export function SearchSelect({
       <PopoverTrigger asChild>
         <Button
           type="button"
+          disabled={disabled}
           role="combobox"
           aria-expanded={open}
           aria-label={ariaLabel}
           aria-labelledby={labelledBy}
           className={cn(
             "w-full justify-between gap-2 border border-input bg-background font-normal",
+            "disabled:cursor-not-allowed disabled:border-muted disabled:bg-muted disabled:text-muted-foreground disabled:opacity-70",
             triggerClassName,
           )}
         >
