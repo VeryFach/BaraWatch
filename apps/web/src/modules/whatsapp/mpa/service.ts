@@ -3,6 +3,7 @@ import { supabaseRequest } from "@/lib/supabase/admin";
 import type { Contact, Region } from "../core/types";
 import { setSession } from "../data/db";
 import { getReportRegionNames } from "../reports/service";
+import { dispatchVerifiedReportAlert } from "../transport/dispatcher";
 import { enqueueTextMessage, flushOutbox } from "../transport/outbox";
 
 export async function notifyMpa(
@@ -172,6 +173,19 @@ export async function classifyReport(
         }),
       });
     }
+  }
+
+  if (
+    isRealFire &&
+    !conflictDetected &&
+    report.verification_outcome === null &&
+    report.region_id
+  ) {
+    await dispatchVerifiedReportAlert(
+      report.id,
+      report.region_id,
+      report.incident_id,
+    );
   }
 
   if (report.verification_outcome === null) {
