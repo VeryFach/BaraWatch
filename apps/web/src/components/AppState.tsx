@@ -238,7 +238,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setReportsLoading(true);
     setReportsError(null);
     try {
-      const response = await fetch("/api/public/reports");
+      const reportId =
+        typeof window === "undefined"
+          ? null
+          : new URLSearchParams(window.location.search).get("report_id");
+      const response = await fetch(
+        reportId
+          ? `/api/public/reports?report_id=${encodeURIComponent(reportId)}`
+          : "/api/public/reports",
+      );
       if (!response.ok) throw new Error("Unable to load reports");
       const { data } = (await response.json()) as { data: PublicReport[] };
       setPublicReports(data);
@@ -252,7 +260,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/public/reports")
+    const reportId =
+      typeof window === "undefined"
+        ? null
+        : new URLSearchParams(window.location.search).get("report_id");
+    fetch(
+      reportId
+        ? `/api/public/reports?report_id=${encodeURIComponent(reportId)}`
+        : "/api/public/reports",
+    )
       .then(async (response) => {
         if (!response.ok) throw new Error("Unable to load reports");
         return (await response.json()) as { data: PublicReport[] };
