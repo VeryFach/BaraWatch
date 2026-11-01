@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
     agentFeedback: true,
   },
   reactCompiler: true,
+  allowedDevOrigins: ['daedal-nonirrevocably-odis.ngrok-free.dev'],
 };
 
 export default nextConfig;

@@ -1,6 +1,6 @@
 import { divIcon } from "leaflet";
 import Image from "next/image";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   CircleMarker,
   MapContainer,
@@ -10,6 +10,7 @@ import {
   TileLayer,
   Tooltip,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
 import { useApp } from "@/components/AppState";
 import "leaflet/dist/leaflet.css";
@@ -19,7 +20,7 @@ import type {
   PublicRegionBoundary,
   PublicReport,
 } from "@/lib/public-api";
-import { type Hotspot, riskLabel, riskVar, statusLabel } from "@/lib/ui-data";
+import { type Hotspot, riskLabel, riskVar } from "@/lib/ui-data";
 
 interface Props {
   showRisk: boolean;
@@ -96,17 +97,51 @@ function FocusReport({ report }: { report?: PublicReport }) {
   return null;
 }
 
+function ViewportLoader() {
+  const { loadMapData } = useApp();
+  const timeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadMapDataRef = useRef(loadMapData);
+  loadMapDataRef.current = loadMapData;
+  const map = useMap();
+
+  const schedule = useCallback(() => {
+    if (timeout.current) clearTimeout(timeout.current);
+    timeout.current = setTimeout(() => {
+      const bounds = map.getBounds();
+      void loadMapDataRef.current(
+        {
+          west: bounds.getWest(),
+          south: bounds.getSouth(),
+          east: bounds.getEast(),
+          north: bounds.getNorth(),
+        },
+        map.getZoom(),
+      );
+    }, 250);
+  }, [map]);
+
+  useMapEvents({
+    moveend: schedule,
+    zoomend: schedule,
+  });
+
+  useEffect(() => {
+    schedule();
+    return () => {
+      if (timeout.current) clearTimeout(timeout.current);
+    };
+  }, [schedule]);
+  return null;
+}
+
 export default function FireMap({
   showRisk,
   showHotspots,
   showReports = true,
-  hideFalse,
   selectedId,
   selectedReportId,
-  onSelect,
   onSelectReport,
   compact,
-  hotspotIds,
   villageNames,
   reports = [],
   regions = [],
@@ -140,6 +175,7 @@ export default function FireMap({
       className="h-full w-full z-0"
     >
       <FocusHotspot selectedId={selectedId} publicHotspots={publicHotspots} />
+      <ViewportLoader />
       <FocusReport
         report={reports.find((report) => report.id === selectedReportId)}
       />

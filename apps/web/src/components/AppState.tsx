@@ -83,6 +83,12 @@ interface Ctx {
     level?: PublicRegionBoundary["level"],
     parentId?: string,
   ) => Promise<void>;
+  loadMapData: (bounds: {
+    west: number;
+    south: number;
+    east: number;
+    north: number;
+  }, zoom: number) => Promise<void>;
   risksLoading: boolean;
 }
 
@@ -106,7 +112,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [hotspotsLoading, setHotspotsLoading] = useState(true);
   const [incidentsLoading, setIncidentsLoading] = useState(true);
   const [regionsLoading, setRegionsLoading] = useState(false);
-  const [risksLoading, setRisksLoading] = useState(true);
+  const [risksLoading, setRisksLoading] = useState(false);
   const [liveDataError, setLiveDataError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -154,11 +160,44 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setPublicIncidents,
       setIncidentsLoading,
     );
-    load("/api/public/risk", setRisks, setRisksLoading);
     return () => {
       active = false;
     };
   }, []);
+
+  const loadMapData = async (
+    bounds: { west: number; south: number; east: number; north: number },
+    zoom: number,
+  ) => {
+    if (zoom < 8) {
+      setRisks([]);
+      return;
+    }
+    const params = new URLSearchParams({
+      ...bounds,
+      zoom: String(zoom),
+    });
+    setRegionsLoading(true);
+    setRisksLoading(true);
+    try {
+      const [regionsResponse, risksResponse] = await Promise.all([
+        fetch(`/api/public/regions?${params}`),
+        fetch(`/api/public/risk?${params}`),
+      ]);
+      if (!regionsResponse.ok || !risksResponse.ok) throw new Error("Unable to load map data");
+      const [{ data: nextRegions }, { data: nextRisks }] = await Promise.all([
+        regionsResponse.json() as Promise<{ data: PublicRegionBoundary[] }>,
+        risksResponse.json() as Promise<{ data: PublicRisk[] }>,
+      ]);
+      setRegions(nextRegions);
+      setRisks(nextRisks);
+    } catch {
+      setLiveDataError("Data risiko wilayah belum dapat dimuat.");
+    } finally {
+      setRegionsLoading(false);
+      setRisksLoading(false);
+    }
+  };
 
   const loadRegions = async (
     level?: PublicRegionBoundary["level"],
@@ -284,6 +323,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     regionsLoading,
     risksLoading,
     loadRegions,
+    loadMapData,
   };
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
