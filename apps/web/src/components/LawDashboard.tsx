@@ -57,12 +57,12 @@ function OwnershipBadge({ status }: { status: OwnershipStatus }) {
 }
 
 export function LawDashboard() {
-  const { ownershipReviews, statusOf } = useApp();
+  const { ownershipReviews, statusOf, hotspots } = useApp();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("semua");
   const [region, setRegion] = useState("semua");
   const [selected, setSelected] = useState<string | null>(null);
-  const cases = buildLandCases(ownershipReviews, statusOf);
+  const cases = buildLandCases(ownershipReviews, statusOf, hotspots);
   const activeCase = cases.find((row) => row.parcel.id === selected);
   const regions = [...new Set(cases.map((row) => row.hotspot.kabupaten))];
   const normalized = query.trim().toLocaleLowerCase("id-ID");
@@ -132,9 +132,9 @@ export function LawDashboard() {
         <ShieldCheck className="mt-0.5 size-4 shrink-0" />
         <span>
           <strong className="font-medium text-foreground">
-            Data contoh, bukan bukti hukum.
+            Data telaah, bukan bukti hukum final.
           </strong>{" "}
-          Nama, dokumen, dan bidang lahan bersifat fiktif.
+          Telaah hanya menampilkan data yang tersedia dari database.
         </span>
       </p>
       <section className="space-y-5">
@@ -189,6 +189,7 @@ export function LawDashboard() {
               onSelect={setSelected}
               ownershipReviews={ownershipReviews}
               statusOf={statusOf}
+              hotspots={hotspots}
             />
           ))}
         </ul>
@@ -217,14 +218,16 @@ function LandCaseRow({
   onSelect,
   ownershipReviews,
   statusOf,
+  hotspots,
 }: {
   row: LandCase;
   onSelect: (id: string) => void;
   ownershipReviews: Parameters<typeof ownerHoldings>[1];
   statusOf: Parameters<typeof ownerHoldings>[2];
+  hotspots: Parameters<typeof ownerHoldings>[3];
 }) {
   const holding = row.owner
-    ? ownerHoldings(row.owner.id, ownershipReviews, statusOf)
+    ? ownerHoldings(row.owner.id, ownershipReviews, statusOf, hotspots)
     : null;
   return (
     <li className="grid items-center gap-4 py-5 sm:grid-cols-2 xl:grid-cols-[1.3fr_1.2fr_1fr_1fr_1.3fr_96px]">
@@ -267,7 +270,8 @@ function LandCaseRow({
 }
 
 function OwnershipDetail({ landCase: row }: { landCase: LandCase }) {
-  const { can, ownershipReviews, reviewOwnership, statusOf } = useApp();
+  const { can, ownershipReviews, reviewOwnership, statusOf, hotspots } =
+    useApp();
   const review = ownershipReviews[row.parcel.id];
   const [ownerId, setOwnerId] = useState(
     parcelOwnerId(row.parcel, ownershipReviews) ?? "unknown",
@@ -290,7 +294,7 @@ function OwnershipDetail({ landCase: row }: { landCase: LandCase }) {
     },
   };
   const holding = selectedOwner
-    ? ownerHoldings(selectedOwner.id, previewReviews, statusOf)
+    ? ownerHoldings(selectedOwner.id, previewReviews, statusOf, hotspots)
     : null;
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -309,7 +313,7 @@ function OwnershipDetail({ landCase: row }: { landCase: LandCase }) {
         <DialogTitle>Kepemilikan lahan · {row.hotspot.desa}</DialogTitle>
         <DialogDescription>
           {row.parcel.id} · {row.hotspot.id} · {row.hotspot.kabupaten} · Data
-          contoh
+          tersimpan
         </DialogDescription>
       </DialogHeader>
       <div className="flex items-center justify-between">

@@ -1,9 +1,5 @@
 import type { Laporan } from "@/components/AppState";
-import {
-  type Hotspot,
-  type HotspotStatus,
-  statusLabel,
-} from "@/lib/dummy-data";
+import { type Hotspot, type HotspotStatus, statusLabel } from "@/lib/ui-data";
 
 export type ActivityKind = "laporan" | "kejadian";
 export interface ActivityFilters {

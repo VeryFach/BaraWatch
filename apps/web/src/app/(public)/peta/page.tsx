@@ -2,7 +2,8 @@
 
 import { Camera, Filter, Flame, RotateCcw, Search } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { useApp } from "@/components/AppState";
 import { ClientMap } from "@/components/ClientMap";
 import { HotspotDetails } from "@/components/HotspotDetails";
 import { SearchSelect } from "@/components/SearchSelect";
@@ -15,23 +16,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-  desaList,
-  type Hotspot,
-  hotspots,
-  statusLabel,
-} from "@/lib/dummy-data";
-import {
   defaultMapFilters,
   filterHotspots,
   filterVillages,
   type MapFilters,
 } from "@/lib/map-filters";
-import type {
-  PublicHotspot,
-  PublicIncident,
-  PublicRegionBoundary,
-  PublicReport,
-} from "@/lib/public-api";
+import type { PublicRegionBoundary } from "@/lib/public-api";
+import { statusLabel } from "@/lib/ui-data";
 import { cn } from "@/lib/utils";
 
 export default function MapPage() {
@@ -47,105 +38,32 @@ export default function MapPage() {
 }
 
 function MapContent() {
+  const {
+    desaList,
+    hotspots,
+    publicHotspots,
+    publicIncidents,
+    regions,
+    hotspotsLoading,
+    regionsLoading,
+    reportsLoading,
+    reportsError,
+    publicReports,
+  } = useApp();
   const router = useRouter();
   const selectedId = useSearchParams().get("id");
   const selectedReportId = useSearchParams().get("report");
   const [filters, setFilters] = useState<MapFilters>(defaultMapFilters);
   const [showRisk, setShowRisk] = useState(true);
   const [showReports, setShowReports] = useState(true);
-  const [showKonsesi, setShowKonsesi] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [regions, setRegions] = useState<PublicRegionBoundary[]>([]);
-  const [reports, setReports] = useState<PublicReport[]>([]);
-  const [publicHotspots, setPublicHotspots] = useState<
-    PublicHotspot[] | undefined
-  >();
-  const [publicIncidents, setPublicIncidents] = useState<PublicIncident[]>([]);
   const [regionLevels, setRegionLevels] = useState<
     PublicRegionBoundary["level"][]
   >(["kabupaten", "kecamatan", "desa"]);
-  const [mapDataError, setMapDataError] = useState<string | null>(null);
-  useEffect(() => {
-    const load = async () => {
-      const results = await Promise.allSettled([
-        fetch("/api/public/regions"),
-        fetch("/api/public/reports"),
-        fetch("/api/public/hotspots?limit=200"),
-        fetch("/api/public/incidents?limit=200"),
-      ]);
-      const [regionResult, reportResult, hotspotResult, incidentResult] =
-        results;
-      if (regionResult.status === "fulfilled" && regionResult.value.ok) {
-        const body = (await regionResult.value.json()) as {
-          data: PublicRegionBoundary[];
-        };
-        setRegions(body.data);
-      } else {
-        setMapDataError("Batas wilayah belum dapat dimuat dari backend.");
-      }
-      if (reportResult.status === "fulfilled" && reportResult.value.ok) {
-        const body = (await reportResult.value.json()) as {
-          data: PublicReport[];
-        };
-        setReports(body.data);
-      }
-      if (hotspotResult.status === "fulfilled" && hotspotResult.value.ok) {
-        const body = (await hotspotResult.value.json()) as {
-          data: PublicHotspot[];
-        };
-        setPublicHotspots(body.data);
-      } else {
-        setPublicHotspots([]);
-      }
-      if (incidentResult.status === "fulfilled" && incidentResult.value.ok) {
-        const body = (await incidentResult.value.json()) as {
-          data: PublicIncident[];
-        };
-        setPublicIncidents(body.data);
-      }
-    };
-    void load();
-  }, []);
-  const liveList = useMemo<Hotspot[] | undefined>(
-    () =>
-      publicHotspots?.map((hotspot) => ({
-        id: hotspot.id,
-        desa: hotspot.regionName ?? "Wilayah belum tersedia",
-        kecamatan: hotspot.regionDistrict ?? "Wilayah belum tersedia",
-        kabupaten: hotspot.regionDistrict ?? "Wilayah belum tersedia",
-        lat: hotspot.latitude,
-        lng: hotspot.longitude,
-        confidence:
-          hotspot.confidenceLevel === "high"
-            ? 90
-            : hotspot.confidenceLevel === "nominal"
-              ? 65
-              : 35,
-        confidenceLevel: hotspot.confidenceLevel,
-        gambut: hotspot.inPeat,
-        status: "baru",
-        waktu: new Date(hotspot.acqAt).toLocaleTimeString("id-ID", {
-          hour: "2-digit",
-          minute: "2-digit",
-          timeZone: "Asia/Jakarta",
-        }),
-        waktuIso: hotspot.acqAt,
-        sumber: "FIRMS",
-        satellite: hotspot.satellite,
-        instrument: hotspot.instrument,
-        sourceProduct: null,
-        frp: hotspot.frp,
-        brightness: null,
-        daynight: null,
-        luasHa: null,
-        incidentId: hotspot.incidentId,
-        filterStatus: "kept",
-      })),
-    [publicHotspots],
-  );
+  const reports = publicReports;
   const list = useMemo(
-    () => filterHotspots(liveList ?? hotspots, filters),
-    [filters, liveList],
+    () => filterHotspots(hotspots, filters),
+    [filters, hotspots],
   );
   const reportList = useMemo(() => {
     const query = filters.query.trim().toLowerCase();
@@ -181,7 +99,7 @@ function MapContent() {
             .map((desa) => desa.kecamatan),
         ),
       ].sort(),
-    [filters.kabupaten],
+    [filters.kabupaten, desaList],
   );
   const villagesForFilter = useMemo(
     () =>
@@ -198,7 +116,7 @@ function MapContent() {
             .map((desa) => desa.nama),
         ),
       ].sort(),
-    [filters.kabupaten, filters.kecamatan],
+    [filters.kabupaten, filters.kecamatan, desaList],
   );
   const villages = filterVillages(desaList, filters);
   const selected = list.find((hotspot) => hotspot.id === selectedId);
@@ -362,45 +280,71 @@ function MapContent() {
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
           <div className="mb-2 px-2 text-xs text-muted-foreground">
-            {list.length} titik · {reportList.length} laporan ·{" "}
-            {villages.length} desa
+            {hotspotsLoading ? "Memuat titik..." : `${list.length} titik`} ·{" "}
+            {reportsLoading
+              ? "Memuat laporan..."
+              : `${reportList.length} laporan`}{" "}
+            · {villages.length} desa
           </div>
           <ul className="space-y-2">
-            {list.map((h) => (
-              <li key={h.id}>
-                <button
-                  type="button"
-                  className={cn(
-                    "w-full rounded-xl border p-3 text-left transition hover:bg-muted/60",
-                    selectedId === h.id && "border-primary bg-accent",
-                  )}
-                  onClick={() =>
-                    router.replace(`/peta?id=${encodeURIComponent(h.id)}`)
-                  }
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
-                      <Flame className="size-4" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center justify-between gap-2">
-                        <strong className="truncate text-sm">{h.desa}</strong>
-                        <StatusBadge status={h.status} />
-                      </span>
-                      <span className="mt-1 block text-xs text-muted-foreground">
-                        {h.id} · {h.kabupaten} · {h.waktu}
-                      </span>
-                      <span className="mt-1 block text-xs text-muted-foreground">
-                        Confidence {h.confidence}% ·{" "}
-                        {h.gambut ? "Gambut" : "Mineral"}
-                      </span>
-                    </span>
-                  </div>
-                </button>
-                {selected?.id === h.id && <HotspotDetails hotspot={h} />}
-              </li>
-            ))}
+            {hotspotsLoading
+              ? [
+                  "hotspot-a",
+                  "hotspot-b",
+                  "hotspot-c",
+                  "hotspot-d",
+                  "hotspot-e",
+                ].map((key) => (
+                  <li
+                    key={key}
+                    className="h-20 animate-pulse rounded-xl border bg-muted/40"
+                  />
+                ))
+              : list.map((h) => (
+                  <li key={h.id}>
+                    <button
+                      type="button"
+                      className={cn(
+                        "w-full rounded-xl border p-3 text-left transition hover:bg-muted/60",
+                        selectedId === h.id && "border-primary bg-accent",
+                      )}
+                      onClick={() =>
+                        router.replace(`/peta?id=${encodeURIComponent(h.id)}`)
+                      }
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+                          <Flame className="size-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center justify-between gap-2">
+                            <strong className="truncate text-sm">
+                              {h.desa}
+                            </strong>
+                            <StatusBadge status={h.status} />
+                          </span>
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            {h.id} · {h.kabupaten} · {h.waktu}
+                          </span>
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            Confidence {h.confidence}% ·{" "}
+                            {h.gambut ? "Gambut" : "Mineral"}
+                          </span>
+                        </span>
+                      </div>
+                    </button>
+                    {selected?.id === h.id && <HotspotDetails hotspot={h} />}
+                  </li>
+                ))}
           </ul>
+          {regionsLoading && (
+            <p className="px-2 py-3 text-xs text-muted-foreground">
+              Memuat batas wilayah...
+            </p>
+          )}
+          {reportsError && (
+            <p className="px-2 py-3 text-xs text-destructive">{reportsError}</p>
+          )}
           {reportList.length > 0 && (
             <section className="mt-5 border-t pt-4">
               <h2 className="mb-2 px-2 text-sm font-semibold">Laporan warga</h2>
@@ -449,11 +393,14 @@ function MapContent() {
               </ul>
             </section>
           )}
-          {list.length === 0 && reportList.length === 0 && (
-            <p className="py-10 text-center text-sm text-muted-foreground">
-              Tidak ada titik atau laporan yang sesuai.
-            </p>
-          )}
+          {!hotspotsLoading &&
+            !reportsLoading &&
+            list.length === 0 &&
+            reportList.length === 0 && (
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                Tidak ada titik atau laporan yang sesuai.
+              </p>
+            )}
         </div>
       </aside>
       <section className="relative order-1 min-h-[48vh] flex-1 md:order-2">
@@ -471,7 +418,6 @@ function MapContent() {
             router.replace(`/peta?report=${encodeURIComponent(report.id)}`)
           }
           compact={false}
-          showKonsesi={showKonsesi}
           hotspotIds={list.map((h) => h.id)}
           villageNames={villages.map((v) => v.nama)}
           reports={reports}
@@ -504,15 +450,6 @@ function MapContent() {
               />
               Laporan warga
             </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                checked={showKonsesi}
-                onCheckedChange={(v: boolean | "indeterminate") =>
-                  setShowKonsesi(v === true)
-                }
-              />
-              Batas konsesi
-            </div>
             {(["kabupaten", "kecamatan", "desa"] as const).map((level) => (
               <div key={level} className="flex items-center gap-2">
                 <Checkbox
@@ -529,9 +466,6 @@ function MapContent() {
               </div>
             ))}
           </div>
-          {mapDataError && (
-            <p className="mt-2 text-xs text-destructive">{mapDataError}</p>
-          )}
         </div>
       </section>
     </main>

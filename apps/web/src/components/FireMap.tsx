@@ -13,20 +13,13 @@ import {
 } from "react-leaflet";
 import { useApp } from "@/components/AppState";
 import "leaflet/dist/leaflet.css";
-import {
-  desaList,
-  type Hotspot,
-  hotspots,
-  riskLabel,
-  riskVar,
-  statusLabel,
-} from "@/lib/dummy-data";
 import type {
   PublicHotspot,
   PublicIncident,
   PublicRegionBoundary,
   PublicReport,
 } from "@/lib/public-api";
+import { type Hotspot, riskLabel, riskVar, statusLabel } from "@/lib/ui-data";
 
 interface Props {
   showRisk: boolean;
@@ -38,7 +31,6 @@ interface Props {
   onSelect?: (h: Hotspot) => void;
   onSelectReport?: (report: PublicReport) => void;
   compact?: boolean;
-  showKonsesi?: boolean;
   hotspotIds?: string[];
   villageNames?: string[];
   reports?: PublicReport[];
@@ -53,27 +45,6 @@ type LocatedReport = PublicReport & {
   latitude: number;
   longitude: number;
 };
-
-const konsesi: { nama: string; pts: [number, number][] }[] = [
-  {
-    nama: "PT Sawit Lestari (contoh)",
-    pts: [
-      [-2.48, 114.1],
-      [-2.48, 114.3],
-      [-2.62, 114.3],
-      [-2.62, 114.1],
-    ],
-  },
-  {
-    nama: "PT Hutan Raya (contoh)",
-    pts: [
-      [-2.85, 113.75],
-      [-2.85, 113.95],
-      [-3.02, 113.95],
-      [-3.02, 113.75],
-    ],
-  },
-];
 
 const css = (v: string) =>
   typeof window === "undefined"
@@ -92,15 +63,9 @@ function FocusHotspot({
   const map = useMap();
   useEffect(() => {
     const live = publicHotspots?.find((row) => row.id === selectedId);
-    const fixture =
-      publicHotspots === undefined
-        ? hotspots.find((row) => row.id === selectedId)
-        : undefined;
     const coordinates = live
       ? ([live.latitude, live.longitude] as [number, number])
-      : fixture
-        ? ([fixture.lat, fixture.lng] as [number, number])
-        : null;
+      : null;
     if (coordinates)
       map.setView(coordinates, Math.max(map.getZoom(), 10), {
         animate: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -141,7 +106,6 @@ export default function FireMap({
   onSelect,
   onSelectReport,
   compact,
-  showKonsesi,
   hotspotIds,
   villageNames,
   reports = [],
@@ -151,14 +115,8 @@ export default function FireMap({
   publicIncidents = [],
   onSelectPublicHotspot,
 }: Props) {
-  const { statusOf } = useApp();
-  const list = hotspots
-    .map((h) => ({ ...h, status: statusOf(h.id) }))
-    .filter((h) =>
-      hotspotIds
-        ? hotspotIds.includes(h.id)
-        : !(hideFalse && h.status === "bukan-api"),
-    );
+  const { desaList } = useApp();
+  const liveHotspots = publicHotspots ?? [];
   const reportGroups = useMemo(() => {
     const groups = new Map<string, LocatedReport[]>();
     const locatedReports = reports.filter(
@@ -189,21 +147,6 @@ export default function FireMap({
         attribution="&copy; OpenStreetMap contributors"
         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      {showKonsesi &&
-        konsesi.map((k) => (
-          <Polygon
-            key={k.nama}
-            positions={k.pts}
-            pathOptions={{
-              color: css("var(--forest)"),
-              dashArray: "6 6",
-              weight: 2,
-              fillOpacity: 0.08,
-            }}
-          >
-            <Tooltip sticky>{k.nama}</Tooltip>
-          </Polygon>
-        ))}
       {regions
         .filter(
           (region) =>
@@ -255,8 +198,7 @@ export default function FireMap({
             </CircleMarker>
           ))}
       {showHotspots &&
-        publicHotspots !== undefined &&
-        publicHotspots.map((h) => (
+        liveHotspots.map((h) => (
           <CircleMarker
             key={`live-hotspot-${h.id}`}
             center={[h.latitude, h.longitude]}
@@ -285,37 +227,7 @@ export default function FireMap({
           </CircleMarker>
         ))}
       {showHotspots &&
-        publicHotspots === undefined &&
-        list.map((h) => {
-          const off = h.status === "bukan-api" || h.status === "selesai";
-          const sel = selectedId === h.id;
-          return (
-            <CircleMarker
-              key={h.id}
-              center={[h.lat, h.lng]}
-              radius={sel ? 11 : 7}
-              eventHandlers={{ click: () => onSelect?.(h) }}
-              pathOptions={{
-                color: css("var(--map-marker-stroke)"),
-                weight: 2,
-                fillColor: off
-                  ? css("var(--map-marker-inactive)")
-                  : css("var(--risk-extreme)"),
-                fillOpacity: 1,
-              }}
-            >
-              {!onSelect && (
-                <Popup>
-                  <b>{h.desa}</b> — {statusLabel[h.status]}
-                  <br />
-                  Confidence {h.confidence}% · {h.waktu}
-                </Popup>
-              )}
-            </CircleMarker>
-          );
-        })}
-      {showHotspots &&
-        publicHotspots !== undefined &&
+        liveHotspots.length > 0 &&
         publicIncidents
           .filter(
             (incident) =>
@@ -389,17 +301,19 @@ export default function FireMap({
                         </p>
                         {report.media.some((media) => media.annotated) && (
                           <div className="mt-2 grid grid-cols-2 gap-2">
-                            {report.media.filter((media) => media.annotated).map((media) => (
-                              <Image
-                                key={media.url}
-                                src={media.url}
-                                alt="Bukti laporan"
-                                width={240}
-                                height={160}
-                                unoptimized
-                                className="h-20 w-full rounded-md object-cover"
-                              />
-                            ))}
+                            {report.media
+                              .filter((media) => media.annotated)
+                              .map((media) => (
+                                <Image
+                                  key={media.url}
+                                  src={media.url}
+                                  alt="Bukti laporan"
+                                  width={240}
+                                  height={160}
+                                  unoptimized
+                                  className="h-20 w-full rounded-md object-cover"
+                                />
+                              ))}
                           </div>
                         )}
                       </div>

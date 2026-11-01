@@ -10,7 +10,7 @@ import {
   Wind,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   Area,
@@ -26,15 +26,8 @@ import { ClientMap } from "@/components/ClientMap";
 import { ReportDialog } from "@/components/ReportDialog";
 import { SearchSelect } from "@/components/SearchSelect";
 import { RiskDot, StatusBadge } from "@/components/StatusBadge";
-import {
-  desaList,
-  hotspots,
-  riskLabel,
-  riskVar,
-  trend7d,
-  weather,
-} from "@/lib/dummy-data";
 import { dashboardView, roles } from "@/lib/roles";
+import { riskLabel, riskVar } from "@/lib/ui-data";
 
 import { cn } from "@/lib/utils";
 
@@ -101,20 +94,17 @@ function WeatherRow() {
   return (
     <div className="grid grid-cols-3 gap-3 text-sm">
       <div>
-        <Droplets className="mb-1 h-4 w-4 text-muted-foreground" />
-        {weather.kelembapan === null ? "—" : `${weather.kelembapan}%`}
+        <Droplets className="mb-1 h-4 w-4 text-muted-foreground" />—
         <div className="text-xs text-muted-foreground">Kelembapan</div>
       </div>
 
       <div>
-        <CloudSun className="mb-1 h-4 w-4 text-muted-foreground" />
-        {weather.suhu === null ? "—" : `${weather.suhu}°C`}
+        <CloudSun className="mb-1 h-4 w-4 text-muted-foreground" />—
         <div className="text-xs text-muted-foreground">Suhu</div>
       </div>
 
       <div>
-        <Wind className="mb-1 h-4 w-4 text-muted-foreground" />
-        14 km/j
+        <Wind className="mb-1 h-4 w-4 text-muted-foreground" />—
         <div className="text-xs text-muted-foreground">Angin tenggara</div>
       </div>
     </div>
@@ -146,6 +136,7 @@ function MapPreview() {
 }
 
 function RawanCard() {
+  const { desaList, risksLoading } = useApp();
   const rawan = desaList.filter(
     (desa) => desa.risk === "ekstrem" || desa.risk === "tinggi",
   );
@@ -159,26 +150,49 @@ function RawanCard() {
       </p>
 
       <ul className="mt-4 space-y-4">
-        {rawan.slice(0, 4).map((desa) => (
-          <li
-            key={desa.nama}
-            className="flex items-start justify-between gap-4"
-          >
-            <div>
-              <div className="font-medium">{desa.nama}</div>
+        {risksLoading
+          ? ["risk-a", "risk-b", "risk-c", "risk-d"].map((key) => (
+              <li
+                key={key}
+                className="h-10 animate-pulse rounded-lg bg-muted/50"
+              />
+            ))
+          : rawan.slice(0, 4).map((desa) => (
+              <li
+                key={desa.nama}
+                className="flex items-start justify-between gap-4"
+              >
+                <div>
+                  <div className="font-medium">{desa.nama}</div>
 
-              <div className="text-sm text-muted-foreground">{desa.alasan}</div>
-            </div>
+                  <div className="text-sm text-muted-foreground">
+                    {desa.alasan}
+                  </div>
+                </div>
 
-            <RiskDot risk={desa.risk} />
-          </li>
-        ))}
+                <RiskDot risk={desa.risk} />
+              </li>
+            ))}
       </ul>
     </div>
   );
 }
 
 function TrendCard() {
+  const [trend, setTrend] = useState<
+    { hari: string; mentah: number; tersaring: number }[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    void fetch("/api/public/trend")
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Trend unavailable");
+        return (await response.json()) as { data: typeof trend };
+      })
+      .then(({ data }) => setTrend(data))
+      .catch(() => setTrend([]))
+      .finally(() => setLoading(false));
+  }, []);
   return (
     <div className={cn(card, "p-6")}>
       <h2 className="font-semibold">Tren 7 hari</h2>
@@ -188,59 +202,63 @@ function TrendCard() {
       </p>
 
       <div className="mt-6 h-56">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={trend7d} margin={{ left: -20, right: 4 }}>
-            <CartesianGrid vertical={false} stroke="var(--border)" />
+        {loading ? (
+          <div className="h-full animate-pulse rounded-xl bg-muted/50" />
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={trend} margin={{ left: -20, right: 4 }}>
+              <CartesianGrid vertical={false} stroke="var(--border)" />
 
-            <XAxis
-              dataKey="hari"
-              tickLine={false}
-              axisLine={false}
-              fontSize={12}
-              stroke="var(--muted-foreground)"
-            />
+              <XAxis
+                dataKey="hari"
+                tickLine={false}
+                axisLine={false}
+                fontSize={12}
+                stroke="var(--muted-foreground)"
+              />
 
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              fontSize={12}
-              stroke="var(--muted-foreground)"
-            />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                fontSize={12}
+                stroke="var(--muted-foreground)"
+              />
 
-            <Tooltip
-              contentStyle={{
-                borderRadius: 12,
-                border: "1px solid var(--border)",
-              }}
-            />
+              <Tooltip
+                contentStyle={{
+                  borderRadius: 12,
+                  border: "1px solid var(--border)",
+                }}
+              />
 
-            <Area
-              type="monotone"
-              dataKey="mentah"
-              name="Mentah"
-              stroke="var(--muted-foreground)"
-              fill="var(--muted)"
-              strokeWidth={2}
-            />
+              <Area
+                type="monotone"
+                dataKey="mentah"
+                name="Mentah"
+                stroke="var(--muted-foreground)"
+                fill="var(--muted)"
+                strokeWidth={2}
+              />
 
-            <Area
-              type="monotone"
-              dataKey="tersaring"
-              name="Tersaring"
-              stroke="var(--chart-1)"
-              fill="var(--chart-1)"
-              fillOpacity={0.15}
-              strokeWidth={2}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+              <Area
+                type="monotone"
+                dataKey="tersaring"
+                name="Tersaring"
+                stroke="var(--chart-1)"
+                fill="var(--chart-1)"
+                fillOpacity={0.15}
+                strokeWidth={2}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   );
 }
 
 function AlertList() {
-  const { statusOf } = useApp();
+  const { statusOf, hotspots } = useApp();
 
   const list = hotspots
     .filter((hotspot) => statusOf(hotspot.id) !== "bukan-api")
@@ -355,14 +373,22 @@ export default function DashboardPage() {
 }
 
 function PublicDashboard() {
-  const { laporan, statusOf } = useApp();
+  const {
+    laporan,
+    statusOf,
+    hotspots,
+    desaList,
+    liveDataLoading,
+    liveDataError,
+    hotspotsLoading,
+  } = useApp();
 
-  const [desa, setDesa] = useState("Kalampangan");
+  const [desa, setDesa] = useState("all");
   const [kabupaten, setKabupaten] = useState("all");
   const [kecamatan, setKecamatan] = useState("all");
   const kabupatenOptions = useMemo(
     () => [...new Set(desaList.map((item) => item.kabupaten))].sort(),
-    [],
+    [desaList],
   );
   const kecamatanOptions = useMemo(
     () =>
@@ -375,7 +401,7 @@ function PublicDashboard() {
             .map((item) => item.kecamatan),
         ),
       ].sort(),
-    [kabupaten],
+    [kabupaten, desaList],
   );
   const desaOptions = useMemo(
     () =>
@@ -384,15 +410,13 @@ function PublicDashboard() {
           (kabupaten === "all" || item.kabupaten === kabupaten) &&
           (kecamatan === "all" || item.kecamatan === kecamatan),
       ),
-    [kabupaten, kecamatan],
+    [kabupaten, kecamatan, desaList],
   );
 
   const selectedDesa =
     desaOptions.find((item) => item.nama === desa) ??
     desaOptions[0] ??
     desaList[0];
-
-  if (!selectedDesa) return null;
 
   const aktif = hotspots.filter((hotspot) =>
     ["baru", "diverifikasi", "ditangani"].includes(statusOf(hotspot.id)),
@@ -419,8 +443,10 @@ function PublicDashboard() {
           className="flex items-center gap-2 rounded-full bg-destructive/10 px-5 py-2.5 text-sm font-medium text-destructive transition hover:bg-destructive/15"
         >
           <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />
-          {hotspots.filter((h) => statusOf(h.id) === "baru").length} titik api
-          baru
+          {hotspotsLoading
+            ? "…"
+            : hotspots.filter((h) => statusOf(h.id) === "baru").length}{" "}
+          titik api baru
           <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
@@ -430,7 +456,7 @@ function PublicDashboard() {
         <Stat
           icon={Flame}
           label="Titik api aktif"
-          value={String(aktif)}
+          value={hotspotsLoading ? "…" : String(aktif)}
           hint="Di wilayah pantauan"
           tone="bg-destructive/10 text-destructive"
         />
@@ -438,7 +464,7 @@ function PublicDashboard() {
         <Stat
           icon={AlertTriangle}
           label="Desa berisiko tinggi"
-          value={String(rawan)}
+          value={liveDataLoading ? "…" : String(rawan)}
           hint="Risiko tinggi dan ekstrem"
           tone="bg-risk-medium/20 text-foreground"
         />
@@ -446,8 +472,8 @@ function PublicDashboard() {
         <Stat
           icon={CloudSun}
           label="Hari tanpa hujan"
-          value={String(weather.hariTanpaHujan)}
-          hint="Rata-rata provinsi"
+          value="—"
+          hint="Belum tersedia"
           tone="bg-forest/10 text-forest"
         />
       </section>
@@ -459,84 +485,102 @@ function PublicDashboard() {
             Cek risiko desa
           </div>
 
-          <div className="mt-2 grid gap-2 sm:grid-cols-3">
-            <SearchSelect
-              ariaLabel="Pilih kabupaten"
-              value={kabupaten}
-              onChange={(value) => {
-                setKabupaten(value);
-                setKecamatan("all");
-                setDesa("all");
-              }}
-              options={[
-                { value: "all", label: "Semua kabupaten" },
-                ...kabupatenOptions.map((value) => ({ value, label: value })),
-              ]}
-              triggerClassName="text-foreground"
-            />
-            <SearchSelect
-              ariaLabel="Pilih kecamatan"
-              value={kecamatan}
-              onChange={(value) => {
-                setKecamatan(value);
-                setDesa("all");
-              }}
-              options={[
-                { value: "all", label: "Semua kecamatan" },
-                ...kecamatanOptions.map((value) => ({ value, label: value })),
-              ]}
-              triggerClassName="text-foreground"
-            />
-            <SearchSelect
-              labelledBy="desa-label"
-              searchPlaceholder="Cari desa..."
-              value={desa}
-              onChange={setDesa}
-              options={[
-                { value: "all", label: "Semua desa" },
-                ...desaOptions.map((item) => ({
-                  value: item.nama,
-                  label: item.nama,
-                })),
-              ]}
-              triggerClassName="text-foreground"
-            />
-          </div>
-
-          <div className="mt-8 flex items-center gap-5">
-            <div
-              className="flex h-20 w-20 items-center justify-center rounded-2xl"
-              style={{
-                background: `color-mix(in oklab, ${riskVar[selectedDesa.risk]} 20%, transparent)`,
-              }}
-            >
-              <AlertTriangle
-                className="h-9 w-9"
-                style={{ color: riskVar[selectedDesa.risk] }}
-              />
+          {liveDataError && (
+            <p className="mt-2 text-sm text-destructive">{liveDataError}</p>
+          )}
+          {!selectedDesa ? (
+            <div className="mt-6 space-y-4">
+              <div className="h-10 animate-pulse rounded-lg bg-muted/50" />
+              <div className="h-24 animate-pulse rounded-2xl bg-muted/50" />
             </div>
-
-            <div>
-              <div className="text-sm text-muted-foreground">
-                Risiko minggu ini
+          ) : (
+            <>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                <SearchSelect
+                  ariaLabel="Pilih kabupaten"
+                  value={kabupaten}
+                  onChange={(value) => {
+                    setKabupaten(value);
+                    setKecamatan("all");
+                    setDesa("all");
+                  }}
+                  options={[
+                    { value: "all", label: "Semua kabupaten" },
+                    ...kabupatenOptions.map((value) => ({
+                      value,
+                      label: value,
+                    })),
+                  ]}
+                  triggerClassName="text-foreground"
+                />
+                <SearchSelect
+                  ariaLabel="Pilih kecamatan"
+                  value={kecamatan}
+                  onChange={(value) => {
+                    setKecamatan(value);
+                    setDesa("all");
+                  }}
+                  options={[
+                    { value: "all", label: "Semua kecamatan" },
+                    ...kecamatanOptions.map((value) => ({
+                      value,
+                      label: value,
+                    })),
+                  ]}
+                  triggerClassName="text-foreground"
+                />
+                <SearchSelect
+                  labelledBy="desa-label"
+                  searchPlaceholder="Cari desa..."
+                  value={desa}
+                  onChange={setDesa}
+                  options={[
+                    { value: "all", label: "Semua desa" },
+                    ...desaOptions.map((item) => ({
+                      value: item.nama,
+                      label: item.nama,
+                    })),
+                  ]}
+                  triggerClassName="text-foreground"
+                />
               </div>
 
-              <div
-                className="text-3xl font-semibold"
-                style={{ color: riskVar[selectedDesa.risk] }}
-              >
-                {riskLabel[selectedDesa.risk]}
+              <div className="mt-8 flex items-center gap-5">
+                <div
+                  className="flex h-20 w-20 items-center justify-center rounded-2xl"
+                  style={{
+                    background: `color-mix(in oklab, ${riskVar[selectedDesa.risk]} 20%, transparent)`,
+                  }}
+                >
+                  <AlertTriangle
+                    className="h-9 w-9"
+                    style={{ color: riskVar[selectedDesa.risk] }}
+                  />
+                </div>
+
+                <div>
+                  <div className="text-sm text-muted-foreground">
+                    Risiko minggu ini
+                  </div>
+
+                  <div
+                    className="text-3xl font-semibold"
+                    style={{ color: riskVar[selectedDesa.risk] }}
+                  >
+                    {riskLabel[selectedDesa.risk]}
+                  </div>
+
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    Karena {selectedDesa.alasan.toLowerCase()}
+                  </div>
+                </div>
               </div>
 
-              <div className="mt-1 text-sm text-muted-foreground">
-                Karena {selectedDesa.alasan.toLowerCase()}
+              <div className="mt-8 border-t pt-6">
+                <WeatherRow />
               </div>
-            </div>
-          </div>
-
-          <div className="mt-8 border-t pt-6">
-            <WeatherRow />
-          </div>
+            </>
+          )}
         </div>
 
         <div className="space-y-6 lg:col-span-2">

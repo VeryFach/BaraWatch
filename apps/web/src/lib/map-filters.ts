@@ -1,4 +1,4 @@
-import type { Desa, Hotspot } from "@/lib/dummy-data";
+import type { Desa, Hotspot } from "@/lib/ui-data";
 
 export interface MapFilters {
   query: string;

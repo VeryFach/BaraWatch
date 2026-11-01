@@ -26,7 +26,6 @@ import { toast } from "sonner";
 import { ClientMap } from "@/components/ClientMap";
 import { LawDashboard } from "@/components/LawDashboard";
 import { Button } from "@/components/ui/button";
-import { resources, trend7d } from "@/lib/dummy-data";
 import type { dashboardView } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 
@@ -102,7 +101,7 @@ function Stat({
 type TrendPoint = { hari: string; mentah: number; tersaring: number };
 
 function TrendCard({
-  data = trend7d,
+  data = [],
   loading = false,
   error = null,
 }: {
@@ -165,7 +164,7 @@ function TrendCard({
   );
 }
 
-function MapPreview({ showKonsesi = false }: { showKonsesi?: boolean }) {
+function MapPreview() {
   return (
     <div className={cn(card, "overflow-hidden")}>
       <SectionHead
@@ -181,13 +180,7 @@ function MapPreview({ showKonsesi = false }: { showKonsesi?: boolean }) {
         }
       />
       <div className="h-80">
-        <ClientMap
-          showRisk
-          showHotspots
-          hideFalse
-          compact
-          showKonsesi={showKonsesi}
-        />
+        <ClientMap showRisk showHotspots hideFalse compact />
       </div>
     </div>
   );
@@ -240,24 +233,29 @@ export function PetugasView() {
         <Stat
           icon={Flame}
           label="Titik aktif"
-          value={String(active)}
+          value={loading ? "…" : String(active)}
           hint="Perlu dipantau"
           tone="bg-destructive/10 text-destructive"
         />
         <Stat
           icon={Check}
           label="Terverifikasi"
-          value={String(verified)}
+          value={loading ? "…" : String(verified)}
           hint="Api nyata"
           tone="bg-forest/10 text-forest"
         />
         <Stat
           icon={ArrowUpRight}
           label="Dapat dieskalasi"
-          value={String(
-            incidents.filter((incident) => incident.status === "in_progress")
-              .length,
-          )}
+          value={
+            loading
+              ? "…"
+              : String(
+                  incidents.filter(
+                    (incident) => incident.status === "in_progress",
+                  ).length,
+                )
+          }
           hint="Ke BPBD"
           tone="bg-risk-medium/20 text-foreground"
         />
@@ -396,26 +394,68 @@ function OpsIncidentList({
 }
 
 function TeamCard() {
+  const [resources, setResources] = useState<
+    {
+      id: string;
+      name: string;
+      agency: string | null;
+      region: string | null;
+      is_active: boolean;
+    }[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    void fetch("/api/ops/teams")
+      .then(async (response) => {
+        const result = (await response.json()) as {
+          data?: typeof resources;
+          error?: string;
+        };
+        if (!response.ok)
+          throw new Error(result.error ?? "Tim belum dapat dimuat.");
+        setResources(result.data ?? []);
+      })
+      .catch((loadError: unknown) =>
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Tim belum dapat dimuat.",
+        ),
+      )
+      .finally(() => setLoading(false));
+  }, []);
   return (
     <div className={cn(card, "p-6")}>
       <h2 className="font-semibold">Tim di lapangan</h2>
       <ul className="mt-4 space-y-3">
+        {error && <li className="text-sm text-destructive">{error}</li>}
+        {loading &&
+          ["team-a", "team-b", "team-c"].map((key) => (
+            <li
+              key={key}
+              className="h-10 animate-pulse rounded-lg bg-muted/50"
+            />
+          ))}
+        {!loading && !error && resources.length === 0 && (
+          <li className="text-sm text-muted-foreground">
+            Belum ada tim aktif.
+          </li>
+        )}
         {resources.map((resource) => (
           <li
-            key={resource.nama}
+            key={resource.id}
             className="flex items-center justify-between gap-3 text-sm"
           >
             <div>
-              <div className="font-medium">{resource.nama}</div>
+              <div className="font-medium">{resource.name}</div>
               <div className="text-muted-foreground">
-                {resource.lokasi} ·{" "}
-                {resource.anggota === null
-                  ? "Jumlah belum tersedia"
-                  : `${resource.anggota} orang`}
+                {resource.region ?? "Wilayah belum tersedia"} ·{" "}
+                {resource.agency ?? "Instansi belum tersedia"}
               </div>
             </div>
             <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs">
-              {resource.status}
+              {resource.is_active ? "Bertugas" : "Siaga"}
             </span>
           </li>
         ))}
@@ -512,9 +552,7 @@ export function AdminView() {
           hint={
             dashboardError
               ? "Data belum dapat dimuat"
-              : dashboard?.stats.pendingDemo
-                ? "DEMO · contoh karena antrean kosong"
-                : "Menunggu ditinjau · database"
+              : "Menunggu ditinjau · database"
           }
           tone="bg-risk-medium/20 text-foreground"
         />
@@ -531,9 +569,7 @@ export function AdminView() {
           hint={
             dashboardError
               ? "Data belum dapat dimuat"
-              : dashboard?.stats.labelsDemo
-                ? "DEMO · contoh 37 label minggu ini"
-                : `+${dashboard?.stats.labelsThisWeek ?? 0} minggu ini · database`
+              : `+${dashboard?.stats.labelsThisWeek ?? 0} minggu ini · database`
           }
           tone="bg-forest/10 text-forest"
         />
@@ -550,9 +586,7 @@ export function AdminView() {
           hint={
             dashboardError
               ? "Data belum dapat dimuat"
-              : dashboard?.stats.precisionDemo
-                ? "DEMO · belum ada evaluasi filter"
-                : "Metrik evaluasi filter · database"
+              : "Metrik evaluasi filter · database"
           }
           tone="bg-primary/10 text-accent-foreground"
         />
@@ -569,9 +603,7 @@ export function AdminView() {
           hint={
             dashboardError
               ? "Status belum dapat dimuat"
-              : dashboard?.sources.some((source) => source.demo)
-                ? "DEMO · status pipeline contoh"
-                : "Job pipeline terakhir · database"
+              : "Job pipeline terakhir · database"
           }
           tone="bg-destructive/10 text-destructive"
         />
@@ -599,9 +631,7 @@ export function AdminView() {
             </p>
           ) : pending.length === 0 ? (
             <p className="px-6 pb-6 text-sm text-muted-foreground">
-              {dashboard?.stats.pendingDemo
-                ? "Belum ada laporan pending; angka pada kartu hanya data contoh."
-                : "Tidak ada laporan pending yang perlu ditinjau."}
+              Tidak ada laporan pending yang perlu ditinjau.
             </p>
           ) : (
             <ul className="divide-y">
@@ -735,13 +765,9 @@ export function AdminView() {
                       : "text-muted-foreground"
                   }
                 >
-                  {source.demo
-                    ? source.status === "unknown"
-                      ? "DEMO · Belum ada run"
-                      : `DEMO · ${source.status === "failed" ? "Gagal" : "OK"}`
-                    : source.status === "unknown"
-                      ? "Belum ada run"
-                      : `${source.status}${source.started_at ? ` · ${new Date(source.started_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })}` : ""}`}
+                  {source.status === "unknown"
+                    ? "Belum ada run"
+                    : `${source.status}${source.started_at ? ` · ${new Date(source.started_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })}` : ""}`}
                 </span>
               </li>
             ))}
@@ -776,7 +802,7 @@ export function HukumView() {
         </h1>
       </header>
       <LawDashboard />
-      <MapPreview showKonsesi />
+      <MapPreview />
     </>
   );
 }
