@@ -83,12 +83,15 @@ interface Ctx {
     level?: PublicRegionBoundary["level"],
     parentId?: string,
   ) => Promise<void>;
-  loadMapData: (bounds: {
-    west: number;
-    south: number;
-    east: number;
-    north: number;
-  }, zoom: number) => Promise<void>;
+  loadMapData: (
+    bounds: {
+      west: number;
+      south: number;
+      east: number;
+      north: number;
+    },
+    zoom: number,
+  ) => Promise<void>;
   risksLoading: boolean;
 }
 
@@ -174,7 +177,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       return;
     }
     const params = new URLSearchParams({
-      ...bounds,
+      west: String(bounds.west),
+      south: String(bounds.south),
+      east: String(bounds.east),
+      north: String(bounds.north),
       zoom: String(zoom),
     });
     setRegionsLoading(true);
@@ -184,7 +190,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         fetch(`/api/public/regions?${params}`),
         fetch(`/api/public/risk?${params}`),
       ]);
-      if (!regionsResponse.ok || !risksResponse.ok) throw new Error("Unable to load map data");
+      if (!regionsResponse.ok || !risksResponse.ok)
+        throw new Error("Unable to load map data");
       const [{ data: nextRegions }, { data: nextRisks }] = await Promise.all([
         regionsResponse.json() as Promise<{ data: PublicRegionBoundary[] }>,
         risksResponse.json() as Promise<{ data: PublicRisk[] }>,
