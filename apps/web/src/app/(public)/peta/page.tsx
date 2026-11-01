@@ -25,6 +25,8 @@ import type { PublicRegionBoundary } from "@/lib/public-api";
 import { statusLabel } from "@/lib/ui-data";
 import { cn } from "@/lib/utils";
 
+const ITEMS_PER_PAGE = 3;
+
 export default function MapPage() {
   return (
     <Suspense
@@ -58,6 +60,8 @@ function MapContent() {
   const [showRisk, setShowRisk] = useState(true);
   const [showReports, setShowReports] = useState(true);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [visibleHotspots, setVisibleHotspots] = useState(ITEMS_PER_PAGE);
+  const [visibleReports, setVisibleReports] = useState(ITEMS_PER_PAGE);
   const [regionLevels, setRegionLevels] = useState<
     PublicRegionBoundary["level"][]
   >(["kabupaten", "kecamatan", "desa"]);
@@ -125,6 +129,8 @@ function MapContent() {
   const selected = list.find((hotspot) => hotspot.id === selectedId);
   const update = <K extends keyof MapFilters>(key: K, value: MapFilters[K]) => {
     setFilters((previous) => ({ ...previous, [key]: value }));
+    setVisibleHotspots(ITEMS_PER_PAGE);
+    setVisibleReports(ITEMS_PER_PAGE);
     router.replace("/peta");
   };
   const updateKabupaten = (value: string) => {
@@ -134,6 +140,8 @@ function MapContent() {
       kecamatan: "all",
       desa: "all",
     }));
+    setVisibleHotspots(ITEMS_PER_PAGE);
+    setVisibleReports(ITEMS_PER_PAGE);
     router.replace("/peta");
   };
   const updateKecamatan = (value: string) => {
@@ -142,12 +150,18 @@ function MapContent() {
       kecamatan: value,
       desa: "all",
     }));
+    setVisibleHotspots(ITEMS_PER_PAGE);
+    setVisibleReports(ITEMS_PER_PAGE);
     router.replace("/peta");
   };
   const reset = () => {
     setFilters(defaultMapFilters);
+    setVisibleHotspots(ITEMS_PER_PAGE);
+    setVisibleReports(ITEMS_PER_PAGE);
     router.replace("/peta");
   };
+  const visibleHotspotList = list.slice(0, visibleHotspots);
+  const visibleReportList = reportList.slice(0, visibleReports);
   const active =
     Number(filters.kabupaten !== "all") +
     Number(filters.kecamatan !== "all") +
@@ -221,6 +235,9 @@ function MapContent() {
                     if (open) void loadRegions("kecamatan");
                   }}
                   value={filters.kecamatan}
+                  disabled={
+                    filters.kabupaten === "all" || kecamatans.length === 0
+                  }
                   onChange={updateKecamatan}
                   triggerClassName="text-black"
                   options={[
@@ -237,6 +254,10 @@ function MapContent() {
                     if (open) void loadRegions("desa");
                   }}
                   value={filters.desa}
+                  disabled={
+                    filters.kecamatan === "all" ||
+                    villagesForFilter.length === 0
+                  }
                   onChange={(v) => update("desa", v)}
                   triggerClassName="text-black"
                   options={[
@@ -312,7 +333,7 @@ function MapContent() {
                     className="h-20 animate-pulse rounded-xl border bg-muted/40"
                   />
                 ))
-              : list.map((h) => (
+              : visibleHotspotList.map((h) => (
                   <li key={h.id}>
                     <button
                       type="button"
@@ -349,6 +370,18 @@ function MapContent() {
                   </li>
                 ))}
           </ul>
+          {!hotspotsLoading && visibleHotspots < list.length && (
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-3 w-full"
+              onClick={() =>
+                setVisibleHotspots((count) => count + ITEMS_PER_PAGE)
+              }
+            >
+              Muat lebih banyak titik
+            </Button>
+          )}
           {regionsLoading && (
             <p className="px-2 py-3 text-xs text-muted-foreground">
               Memuat batas wilayah...
@@ -361,7 +394,7 @@ function MapContent() {
             <section className="mt-5 border-t pt-4">
               <h2 className="mb-2 px-2 text-sm font-semibold">Laporan warga</h2>
               <ul className="space-y-2">
-                {reportList.map((report) => (
+                {visibleReportList.map((report) => (
                   <li key={report.id}>
                     <button
                       type="button"
@@ -403,6 +436,18 @@ function MapContent() {
                   </li>
                 ))}
               </ul>
+              {!reportsLoading && visibleReports < reportList.length && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-3 w-full"
+                  onClick={() =>
+                    setVisibleReports((count) => count + ITEMS_PER_PAGE)
+                  }
+                >
+                  Muat lebih banyak laporan
+                </Button>
+              )}
             </section>
           )}
           {!hotspotsLoading &&

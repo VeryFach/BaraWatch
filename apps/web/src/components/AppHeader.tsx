@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useApp } from "@/components/AppState";
 import { Button } from "@/components/ui/button";
@@ -96,6 +97,7 @@ export function AccessDialog() {
 
 export function AppHeader() {
   const { role } = useApp();
+  const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
 
@@ -142,16 +144,29 @@ export function AppHeader() {
           </div>
         </Link>
         <nav className="flex items-center gap-1 rounded-full bg-muted p-1">
-          {navigationItems.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
-            >
-              <Icon className="h-4 w-4" />
-              <span className="hidden sm:inline">{label}</span>
-            </Link>
-          ))}
+          {navigationItems.map(({ href, label, icon: Icon }) =>
+            (() => {
+              const isActive =
+                href === "/"
+                  ? pathname === "/"
+                  : pathname === href || pathname.startsWith(`${href}/`);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-card hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="hidden sm:inline">{label}</span>
+                </Link>
+              );
+            })(),
+          )}
         </nav>
         <div className="flex items-center gap-1">
           <AccessDialog />

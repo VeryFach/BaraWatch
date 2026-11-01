@@ -22,6 +22,8 @@ import {
 } from "@/lib/activity";
 import { cn } from "@/lib/utils";
 
+const ACTIVITIES_PER_PAGE = 6;
+
 function ReportsPageContent() {
   const { laporan, reportsLoading, reportsError } = useApp();
   const searchParams = useSearchParams();
@@ -33,14 +35,22 @@ function ReportsPageContent() {
     kabupaten: "all",
     kecamatan: "all",
     desa: "all",
-    urutan: "terbaru",
   });
   const [open, setOpen] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(ACTIVITIES_PER_PAGE);
   const allActivities = useMemo(() => buildActivities(laporan), [laporan]);
   const activities = useMemo(
     () => filterActivities(allActivities, filters),
     [allActivities, filters],
   );
+  const visibleActivities = activities.slice(0, visibleCount);
+  const hasMoreActivities = visibleCount < activities.length;
+  const updateFilters = (
+    update: (previous: ActivityFilters) => ActivityFilters,
+  ) => {
+    setFilters(update);
+    setVisibleCount(ACTIVITIES_PER_PAGE);
+  };
   useEffect(() => {
     if (
       linkedReportId &&
@@ -93,13 +103,13 @@ function ReportsPageContent() {
           </button>
         </ReportDialog>
       </div>
-      <section className="grid gap-3 rounded-2xl border bg-card p-4 md:grid-cols-[minmax(0,1fr)_160px_200px_140px]">
+      <section className="grid gap-3 rounded-2xl border bg-card p-4 md:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_170px_170px_170px_170px]">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={filters.query}
             onChange={(e) =>
-              setFilters((p) => ({ ...p, query: e.target.value }))
+              updateFilters((p) => ({ ...p, query: e.target.value }))
             }
             placeholder="Cari laporan, desa, atau ID"
             className="h-10 w-full rounded-md border bg-background pl-9 pr-3 text-sm text-black outline-none placeholder:text-gray-500 focus:ring-2 focus:ring-ring/30"
@@ -107,7 +117,9 @@ function ReportsPageContent() {
         </div>
         <select
           value={filters.jenis}
-          onChange={(e) => setFilters((p) => ({ ...p, jenis: e.target.value }))}
+          onChange={(e) =>
+            updateFilters((p) => ({ ...p, jenis: e.target.value }))
+          }
           className="h-10 rounded-md border bg-background px-3 text-sm text-black"
         >
           <option value="semua">Semua jenis</option>
@@ -129,7 +141,7 @@ function ReportsPageContent() {
         <select
           value={filters.kabupaten}
           onChange={(e) =>
-            setFilters((p) => ({
+            updateFilters((p) => ({
               ...p,
               kabupaten: e.target.value,
               kecamatan: "all",
@@ -149,13 +161,13 @@ function ReportsPageContent() {
           value={filters.kecamatan}
           disabled={filters.kabupaten === "all" || kecamatans.length === 0}
           onChange={(e) =>
-            setFilters((p) => ({
+            updateFilters((p) => ({
               ...p,
               kecamatan: e.target.value,
               desa: "all",
             }))
           }
-          className="h-10 rounded-md border bg-background px-3 text-sm text-black"
+          className="h-10 rounded-md border bg-background px-3 text-sm text-black disabled:cursor-not-allowed disabled:border-muted disabled:bg-muted disabled:text-muted-foreground disabled:opacity-70"
         >
           <option value="all">Semua kecamatan</option>
           {kecamatans.map((value) => (
@@ -167,8 +179,10 @@ function ReportsPageContent() {
         <select
           value={filters.desa}
           disabled={filters.kecamatan === "all" || villages.length === 0}
-          onChange={(e) => setFilters((p) => ({ ...p, desa: e.target.value }))}
-          className="h-10 rounded-md border bg-background px-3 text-sm text-black"
+          onChange={(e) =>
+            updateFilters((p) => ({ ...p, desa: e.target.value }))
+          }
+          className="h-10 rounded-md border bg-background px-3 text-sm text-black disabled:cursor-not-allowed disabled:border-muted disabled:bg-muted disabled:text-muted-foreground disabled:opacity-70"
         >
           <option value="all">Semua desa</option>
           {villages.map((value) => (
@@ -177,19 +191,9 @@ function ReportsPageContent() {
             </option>
           ))}
         </select>
-        <select
-          value={filters.urutan}
-          onChange={(e) =>
-            setFilters((p) => ({ ...p, urutan: e.target.value }))
-          }
-          className="h-10 rounded-md border bg-background px-3 text-sm text-black"
-        >
-          <option value="terbaru">Terbaru</option>
-          <option value="terlama">Terlama</option>
-        </select>
       </section>
       <ul className="space-y-3">
-        {activities.map((activity) => (
+        {visibleActivities.map((activity) => (
           <ActivityRow
             key={activity.id}
             activity={activity}
@@ -198,6 +202,19 @@ function ReportsPageContent() {
           />
         ))}
       </ul>
+      {!reportsLoading && !reportsError && hasMoreActivities && (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() =>
+              setVisibleCount((count) => count + ACTIVITIES_PER_PAGE)
+            }
+            className="rounded-full border bg-card px-5 py-2.5 text-sm font-medium hover:bg-muted"
+          >
+            Muat lebih banyak
+          </button>
+        </div>
+      )}
       {reportsLoading && (
         <div className="rounded-2xl border bg-card py-14 text-center text-sm text-muted-foreground">
           Memuat laporan…

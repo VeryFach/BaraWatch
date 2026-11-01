@@ -9,7 +9,6 @@ export interface ActivityFilters {
   kabupaten: string;
   kecamatan: string;
   desa: string;
-  urutan: string;
 }
 
 export const defaultActivityFilters: ActivityFilters = {
@@ -19,7 +18,6 @@ export const defaultActivityFilters: ActivityFilters = {
   kabupaten: "all",
   kecamatan: "all",
   desa: "all",
-  urutan: "terbaru",
 };
 
 export const reportStatusLabel: Record<Laporan["status"], string> = {
@@ -142,10 +140,5 @@ export function filterActivities(
           .toLocaleLowerCase("id")
           .includes(query),
     )
-    .sort((a, b) => {
-      const direction = filters.urutan === "terlama" ? 1 : -1;
-      return (
-        direction * a.waktu.localeCompare(b.waktu) || a.id.localeCompare(b.id)
-      );
-    });
+    .sort((a, b) => b.waktu.localeCompare(a.waktu) || a.id.localeCompare(b.id));
 }
