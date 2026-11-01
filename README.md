@@ -45,6 +45,46 @@ yang menyediakan endpoint untuk:
 Endpoint dan batasan teknis selengkapnya tersedia di
 [`apps/ai-service/README.md`](./apps/ai-service/README.md).
 
+## Penerapan AI dalam aplikasi
+
+AI BaraWatch diterapkan pada alur pemantauan dan peninjauan kebakaran, bukan
+hanya sebagai service terpisah. Saat juri menggunakan aplikasi, penerapan AI
+dapat dilihat pada fitur-fitur berikut:
+
+| Fitur yang terlihat di aplikasi | Penerapan AI | Hasil yang digunakan aplikasi |
+|---|---|---|
+| **Peta hotspot dan kelompok titik api** | Hotspot NASA FIRMS dikelompokkan menggunakan **DBSCAN** dengan jarak Haversine dan pemisahan berdasarkan waktu. | Cluster hotspot, centroid, anggota cluster, noise, serta kandidat insiden yang berdekatan untuk ditampilkan di peta dan diprioritaskan. |
+| **Pelaporan api/asap dengan foto** | Foto laporan diproses oleh **dua model YOLOv8** melalui Ultralytics/PyTorch. | Kelas api/asap, confidence, bounding box, ringkasan indikator, dan gambar anotasi untuk membantu peninjauan laporan. |
+| **Pencocokan laporan dengan hotspot** | Modul **spatial-temporal matching** menggabungkan hasil visi, jarak lokasi, dan selisih waktu dengan hotspot satelit. | Skor pencocokan, alasan keputusan, dan status `auto_pass`, `uncertain`, atau `rejected` sesuai aturan modul. |
+| **Prioritas risiko wilayah** | **Risk scoring** menghitung indeks aktivitas dari jumlah hotspot, rasio hotspot eligible, dan FRP. | Skor risiko, kategori tingkat aktivitas, alasan penilaian, serta status `insufficient_data` jika data belum memadai. |
+| **Estimasi perubahan area terbakar** | Citra Sentinel-2 L2A diproses dengan **NBR/dNBR**, masking SCL, NumPy, dan Rasterio. | Indikasi perubahan area, cakupan piksel valid, estimasi area indikatif, dan informasi ketidakpastian. |
+
+Secara teknis, halaman web berkomunikasi dengan service AI melalui endpoint
+FastAPI di [`apps/ai-service/app/api/v1`](./apps/ai-service/app/api/v1).
+Implementasi algoritma berada di
+[`apps/ai-service/app/services`](./apps/ai-service/app/services), sedangkan
+aplikasi Next.js menampilkan hasilnya pada dashboard, peta, detail laporan,
+dan alur peninjauan petugas.
+
+Alur sederhananya:
+
+```mermaid
+flowchart LR
+  Report[Foto dan lokasi laporan] --> Vision[YOLO Vision]
+  FIRMS[NASA FIRMS hotspot] --> DBSCAN[DBSCAN clustering]
+  Vision --> Matching[Spatial-temporal matching]
+  DBSCAN --> Matching
+  Matching --> Review[Dashboard dan review petugas]
+  FIRMS --> Risk[Risk scoring]
+  Sentinel[Sentinel-2 L2A] --> DNBR[NBR / dNBR]
+  Risk --> Map[Peta risiko]
+  DNBR --> Map
+```
+
+Dengan demikian, AI digunakan untuk membantu **mendeteksi**, **mengelompokkan**,
+**mencocokkan**, dan **memprioritaskan** informasi kebakaran. Keputusan akhir
+tetap memerlukan pemeriksaan manusia dan verifikasi lapangan.
+
 ## Arsitektur
 
 ```mermaid
