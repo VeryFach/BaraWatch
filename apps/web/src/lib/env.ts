@@ -19,6 +19,7 @@ export function getServerEnv() {
       (process.env.TWILIO_WEBHOOK_URL
         ? `${process.env.TWILIO_WEBHOOK_URL}/status`
         : undefined),
+    publicAppUrl: process.env.PUBLIC_APP_URL ?? "http://localhost:3000",
     twilioDebug: process.env.TWILIO_DEBUG === "true",
     twilioAlertTemplateSid: process.env.TWILIO_ALERT_TEMPLATE_SID,
     twilioWebhookSecret: process.env.TWILIO_WEBHOOK_SECRET,
