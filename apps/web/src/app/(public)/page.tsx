@@ -10,7 +10,7 @@ import {
   Wind,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   Area,
@@ -498,6 +498,7 @@ function PublicDashboard() {
   const [kabupaten, setKabupaten] = useState("all");
   const [kecamatan, setKecamatan] = useState("all");
   const [desa, setDesa] = useState("all");
+  const defaultLocationInitialized = useRef(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -555,6 +556,27 @@ function PublicDashboard() {
               subdistrict: null,
             })),
           );
+          if (!defaultLocationInitialized.current) {
+            const byId = new Map(rows.map((region) => [region.id, region]));
+            const defaultVillage =
+              rows.find(
+                (region) =>
+                  region.level === "desa" &&
+                  region.name.toLowerCase() === "kalampangan",
+              ) ?? rows.find((region) => region.level === "desa");
+            const subdistrict = defaultVillage?.parent_id
+              ? byId.get(defaultVillage.parent_id)
+              : undefined;
+            const district = subdistrict?.parent_id
+              ? byId.get(subdistrict.parent_id)
+              : undefined;
+            if (defaultVillage) {
+              setKabupaten(district?.id ?? "all");
+              setKecamatan(subdistrict?.id ?? "all");
+              setDesa(defaultVillage.id);
+            }
+            defaultLocationInitialized.current = true;
+          }
         }
       }
       setLoading(false);
@@ -593,10 +615,7 @@ function PublicDashboard() {
       ),
     [regions, regionById, kabupaten, kecamatan],
   );
-  const selectedDesa =
-    desaOptions.find((region) => region.id === desa) ??
-    desaOptions.find((region) => region.name.toLowerCase() === "kalampangan") ??
-    desaOptions[0];
+  const selectedDesa = desaOptions.find((region) => region.id === desa);
   const selectedRisk = selectedDesa
     ? risks.find((risk) => risk.region_id === selectedDesa.id)
     : undefined;
