@@ -169,7 +169,7 @@ export function AppHeader() {
           )}
         </nav>
         <div className="flex items-center gap-1">
-          <AccessDialog />
+          {/* <AccessDialog /> */}
           {mounted && authenticated === false && (
             <Link
               href="/login"

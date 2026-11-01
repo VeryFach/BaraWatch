@@ -33,6 +33,8 @@ token Twilio, `AI_INTERNAL_KEY`, atau `BARAWATCH_AI_API_KEY` dari browser.
 | PATCH | `/api/admin/contacts` | Admin | Mengubah nama dan assignment kontak |
 | GET | `/api/ops/incidents` | Petugas/Admin | Daftar insiden aktif dalam wilayah kerja |
 | PATCH | `/api/ops/incidents` | Petugas/Admin | Memperbarui status operasional dan membuat log |
+| GET | `/api/ops/reports` | Petugas/Admin | Daftar laporan untuk verifikasi lapangan |
+| PATCH | `/api/ops/reports` | Petugas/Admin | Menandai laporan sebagai api nyata atau bukan api |
 | POST | `/api/webhooks/whatsapp` | `X-Twilio-Signature` | Webhook inbound Twilio |
 | POST | `/api/webhooks/whatsapp/status` | `X-Twilio-Signature` | Callback status outbound Twilio |
 | GET | `/api/debug/twilio` | `TWILIO_DEBUG=true` | Tes kredensial Twilio |

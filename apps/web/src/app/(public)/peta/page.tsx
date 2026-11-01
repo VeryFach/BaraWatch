@@ -6,6 +6,7 @@ import { Suspense, useMemo, useState } from "react";
 import { useApp } from "@/components/AppState";
 import { ClientMap } from "@/components/ClientMap";
 import { HotspotDetails } from "@/components/HotspotDetails";
+import { ReportVerificationActions } from "@/components/ReportVerificationActions";
 import { SearchSelect } from "@/components/SearchSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,8 @@ function MapContent() {
     reportsError,
     publicReports,
     loadRegions,
+    can,
+    refreshReports,
   } = useApp();
   const router = useRouter();
   const selectedId = useSearchParams().get("id");
@@ -396,43 +399,57 @@ function MapContent() {
               <ul className="space-y-2">
                 {visibleReportList.map((report) => (
                   <li key={report.id}>
-                    <button
-                      type="button"
+                    <div
                       className={cn(
-                        "w-full rounded-xl border p-3 text-left transition hover:bg-muted/60",
+                        "w-full rounded-xl border p-3 transition hover:bg-muted/60",
                         selectedReportId === report.id &&
                           "border-primary bg-accent",
                       )}
-                      onClick={() =>
-                        router.replace(
-                          `/peta?report=${encodeURIComponent(report.id)}`,
-                        )
-                      }
                     >
-                      <div className="flex items-start gap-3">
-                        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                          <Camera className="size-4" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <strong className="block truncate text-sm">
-                            {report.region?.name ?? "Wilayah belum tersedia"}
-                          </strong>
-                          <span className="mt-1 block text-xs text-muted-foreground">
-                            {report.id} ·{" "}
-                            {report.region?.parent?.name ??
-                              "Kabupaten belum tersedia"}
+                      <button
+                        type="button"
+                        className="w-full text-left"
+                        onClick={() =>
+                          router.replace(
+                            `/peta?report=${encodeURIComponent(report.id)}`,
+                          )
+                        }
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <Camera className="size-4" />
                           </span>
-                          <span className="mt-1 block truncate text-xs text-muted-foreground">
-                            {report.description ?? "Deskripsi belum tersedia"}
-                          </span>
-                          {report.media.length > 0 && (
-                            <span className="mt-1 block text-xs text-primary">
-                              {report.media.length} gambar bukti
+                          <span className="min-w-0 flex-1">
+                            <strong className="block truncate text-sm">
+                              {report.region?.name ?? "Wilayah belum tersedia"}
+                            </strong>
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              {report.id} ·{" "}
+                              {report.region?.parent?.name ??
+                                "Kabupaten belum tersedia"}
                             </span>
-                          )}
-                        </span>
-                      </div>
-                    </button>
+                            <span className="mt-1 block truncate text-xs text-muted-foreground">
+                              {report.description ?? "Deskripsi belum tersedia"}
+                            </span>
+                            {report.media.length > 0 && (
+                              <span className="mt-1 block text-xs text-primary">
+                                {report.media.length} gambar bukti
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      </button>
+                      {can("verifikasi") && (
+                        <div className="mt-2">
+                          <ReportVerificationActions
+                            reportId={report.id}
+                            status={report.status}
+                            incidentId={report.incident_id}
+                            onUpdated={refreshReports}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>

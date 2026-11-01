@@ -174,6 +174,7 @@ export function publicReportFromSanitizedRow(
 export function reportToLaporan(report: PublicReport) {
   return {
     id: report.id,
+    incident_id: report.incident_id,
     desa: report.region?.name ?? "Wilayah belum tersedia",
     kecamatan:
       report.region?.parent?.level === "kecamatan"
@@ -192,7 +193,7 @@ export function reportToLaporan(report: PublicReport) {
     waktuIso: report.created_at,
     skorAI: report.verification_score ?? 0,
     status:
-      report.status === "verified"
+      report.status === "verified" || report.status === "handled"
         ? ("diterima" as const)
         : report.status === "rejected"
           ? ("ditolak" as const)

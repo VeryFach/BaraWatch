@@ -25,6 +25,7 @@ import {
 import { toast } from "sonner";
 import { ClientMap } from "@/components/ClientMap";
 import { LawDashboard } from "@/components/LawDashboard";
+import { ReportVerificationActions } from "@/components/ReportVerificationActions";
 import { Button } from "@/components/ui/button";
 import type { PublicHotspot, PublicIncident } from "@/lib/public-api";
 import type { dashboardView } from "@/lib/roles";
@@ -220,6 +221,9 @@ export function PetugasView() {
   const [trendError, setTrendError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reports, setReports] = useState<OpsReport[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [reportsError, setReportsError] = useState<string | null>(null);
   const loadIncidents = useCallback(async () => {
     setError(null);
     try {
@@ -241,9 +245,31 @@ export function PetugasView() {
       setLoading(false);
     }
   }, []);
+  const loadReports = useCallback(async () => {
+    setReportsError(null);
+    try {
+      const response = await fetch("/api/ops/reports", { cache: "no-store" });
+      const result = (await response.json()) as {
+        data?: OpsReport[];
+        error?: string;
+      };
+      if (!response.ok)
+        throw new Error(result.error ?? "Gagal memuat laporan.");
+      setReports(result.data ?? []);
+    } catch (loadError) {
+      setReportsError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Gagal memuat laporan.",
+      );
+    } finally {
+      setReportsLoading(false);
+    }
+  }, []);
   useEffect(() => {
     void loadIncidents();
-  }, [loadIncidents]);
+    void loadReports();
+  }, [loadIncidents, loadReports]);
   useEffect(() => {
     let active = true;
     const fetchData = async <T,>(url: string): Promise<T> => {
@@ -354,7 +380,85 @@ export function PetugasView() {
         error={error}
         onUpdated={loadIncidents}
       />
+      <OpsReportList
+        reports={reports}
+        loading={reportsLoading}
+        error={reportsError}
+        onUpdated={loadReports}
+      />
     </>
+  );
+}
+
+type OpsReport = {
+  id: string;
+  status: "received" | "in_review" | "verified" | "handled" | "rejected";
+  verification_outcome: string | null;
+  description: string | null;
+  created_at: string;
+  incident_id: string | null;
+  region_id: string | null;
+  regions: { name: string } | null;
+};
+
+function OpsReportList({
+  reports,
+  loading,
+  error,
+  onUpdated,
+}: {
+  reports: OpsReport[];
+  loading: boolean;
+  error: string | null;
+  onUpdated: () => Promise<void>;
+}) {
+  return (
+    <div className={card}>
+      <SectionHead
+        title="Laporan lapangan"
+        sub="Verifikasi laporan warga berdasarkan pengecekan petugas."
+      />
+      {loading && (
+        <p className="px-6 pb-6 text-sm text-muted-foreground">
+          Memuat laporan...
+        </p>
+      )}
+      {error && <p className="px-6 pb-6 text-sm text-destructive">{error}</p>}
+      {!loading && !error && reports.length === 0 && (
+        <p className="px-6 pb-6 text-sm text-muted-foreground">
+          Belum ada laporan lapangan.
+        </p>
+      )}
+      <ul className="divide-y">
+        {reports.map((report) => (
+          <li
+            key={report.id}
+            className="flex flex-wrap items-center gap-4 px-6 py-4"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="font-medium">
+                {report.regions?.name ?? "Wilayah belum tersedia"}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {report.id} ·{" "}
+                {new Date(report.created_at).toLocaleString("id-ID")}
+              </div>
+              {report.description && (
+                <div className="mt-1 text-sm text-muted-foreground">
+                  {report.description}
+                </div>
+              )}
+            </div>
+            <ReportVerificationActions
+              reportId={report.id}
+              status={report.status}
+              incidentId={report.incident_id}
+              onUpdated={onUpdated}
+            />
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

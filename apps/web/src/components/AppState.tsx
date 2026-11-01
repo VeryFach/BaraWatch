@@ -37,6 +37,7 @@ import {
 
 export interface Laporan {
   id: string;
+  incident_id: string | null;
   desa: string;
   jenis: "Api" | "Asap";
   catatan: string;

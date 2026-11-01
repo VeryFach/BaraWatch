@@ -7,6 +7,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { ActivityProgress } from "@/components/ActivityProgress";
 import { useApp } from "@/components/AppState";
 import { ReportDialog } from "@/components/ReportDialog";
+import { ReportVerificationActions } from "@/components/ReportVerificationActions";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   Dialog,
@@ -25,7 +26,8 @@ import { cn } from "@/lib/utils";
 const ACTIVITIES_PER_PAGE = 6;
 
 function ReportsPageContent() {
-  const { laporan, reportsLoading, reportsError } = useApp();
+  const { laporan, reportsLoading, reportsError, can, refreshReports } =
+    useApp();
   const searchParams = useSearchParams();
   const linkedReportId = searchParams.get("report_id");
   const [filters, setFilters] = useState<ActivityFilters>({
@@ -199,6 +201,8 @@ function ReportsPageContent() {
             activity={activity}
             open={open === activity.id}
             onToggle={() => setOpen(open === activity.id ? null : activity.id)}
+            canVerify={can("verifikasi")}
+            onVerified={refreshReports}
           />
         ))}
       </ul>
@@ -246,10 +250,14 @@ function ActivityRow({
   activity,
   open,
   onToggle,
+  canVerify,
+  onVerified,
 }: {
   activity: Activity;
   open: boolean;
   onToggle: () => void;
+  canVerify: boolean;
+  onVerified: () => Promise<void>;
 }) {
   const [imageOpen, setImageOpen] = useState(false);
   const imageUrl =
@@ -289,6 +297,11 @@ function ActivityRow({
                 : "Kejadian satelit"}{" "}
               · {activity.waktu} WIB
             </span>
+            {canVerify && activity.kind === "laporan" && (
+              <span className="hidden text-xs text-muted-foreground sm:inline">
+                Petugas
+              </span>
+            )}
             <strong className="mt-1 block">{activity.title}</strong>
             <span className="mt-1 block text-xs text-muted-foreground">
               {activity.kabupaten}
@@ -336,6 +349,22 @@ function ActivityRow({
               )}
               <h2 className="font-semibold">Detail aktivitas</h2>
               <p className="mt-3 text-muted-foreground">{activity.summary}</p>
+              {canVerify && activity.kind === "laporan" && (
+                <div className="mt-4">
+                  <ReportVerificationActions
+                    reportId={activity.report.id}
+                    incidentId={activity.report.incident_id}
+                    status={
+                      activity.status === "diterima"
+                        ? "verified"
+                        : activity.status === "ditolak"
+                          ? "rejected"
+                          : "received"
+                    }
+                    onUpdated={onVerified}
+                  />
+                </div>
+              )}
               {activity.kind === "kejadian" && (
                 <Link
                   href={`/peta?id=${encodeURIComponent(activity.id)}`}
