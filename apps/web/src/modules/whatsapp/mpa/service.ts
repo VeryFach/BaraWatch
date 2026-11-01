@@ -40,7 +40,7 @@ export async function notifyMpa(
     `Lokasi: ${latitude ?? "-"}, ${longitude ?? "-"}\n` +
     `Indikasi AI: ${labels.join(", ")}\n` +
     "Status: Menunggu verifikasi lapangan.\n\n" +
-    `Lihat laporan: ${getServerEnv().publicAppUrl.replace(/\/$/, "")}/laporan?report_id=${encodeURIComponent(reportId)}\n\n` +
+    `Lihat laporan: ${getServerEnv().publicAppUrl.replace(/\/+$/, "")}/laporan?report_id=${encodeURIComponent(reportId)}\n\n` +
     "Balas *1* jika api nyata atau *2* jika bukan api nyata.\n" +
     "Balas *MPA* untuk membuka menu laporan.";
   await Promise.all(
