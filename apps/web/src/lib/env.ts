@@ -14,6 +14,11 @@ export function getServerEnv() {
     twilioAuthToken: required("TWILIO_AUTH_TOKEN"),
     twilioWhatsappFrom: required("TWILIO_WHATSAPP_FROM"),
     twilioWebhookUrl: process.env.TWILIO_WEBHOOK_URL,
+    twilioStatusCallbackUrl:
+      process.env.TWILIO_STATUS_CALLBACK_URL ??
+      (process.env.TWILIO_WEBHOOK_URL
+        ? `${process.env.TWILIO_WEBHOOK_URL}/status`
+        : undefined),
     twilioDebug: process.env.TWILIO_DEBUG === "true",
     twilioAlertTemplateSid: process.env.TWILIO_ALERT_TEMPLATE_SID,
     twilioWebhookSecret: process.env.TWILIO_WEBHOOK_SECRET,

@@ -2,7 +2,7 @@ import { supabaseRequest } from "@/lib/supabase/admin";
 import type { Contact, Region } from "../core/types";
 import { setSession } from "../data/db";
 import { getReportRegionNames } from "../reports/service";
-import { twilioProvider } from "../transport/twilio";
+import { enqueueTextMessage, flushOutbox } from "../transport/outbox";
 
 export async function notifyMpa(
   reportId: string,
@@ -46,21 +46,13 @@ export async function notifyMpa(
       await setSession(mpa.id, "mpa_pending_verification", {
         reportId,
       });
-      const sent = await twilioProvider.sendText(mpa.phone_e164, body);
-      await supabaseRequest("wa_messages", {
-        method: "POST",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({
-          contact_id: mpa.id,
-          direction: "out",
-          kind: "report_status",
-          provider_sid: sent.sid,
-          body,
-          status: "sent",
-          report_id: reportId,
-          handed_off_at: new Date().toISOString(),
-        }),
+      const queuedId = await enqueueTextMessage({
+        contactId: mpa.id,
+        kind: "report_status",
+        body,
+        reportId,
       });
+      if (queuedId) await flushOutbox(1, queuedId);
     }),
   );
   return targets.length;
@@ -136,32 +128,33 @@ export async function classifyReport(
 ) {
   const report = await findReportById(reportId);
   if (!report) return null;
-  if (report.verification_outcome !== null) {
-    return { report, status: report.status, alreadyClassified: true };
-  }
   const status = isRealFire ? "verified" : "rejected";
-  await supabaseRequest(`reports?id=eq.${encodeURIComponent(reportId)}`, {
-    method: "PATCH",
-    body: JSON.stringify({
-      status,
-      verification_outcome: isRealFire ? "auto_pass" : "rejected",
-      updated_at: new Date().toISOString(),
-    }),
-  });
-
-  if (report.incident_id) {
-    await supabaseRequest("assessments", {
-      method: "POST",
-      headers: { Prefer: "return=minimal" },
+  if (report.verification_outcome === null) {
+    await supabaseRequest(`reports?id=eq.${encodeURIComponent(reportId)}`, {
+      method: "PATCH",
       body: JSON.stringify({
-        incident_id: report.incident_id,
-        contact_id: mpaContactId,
-        verdict: isRealFire ? "real_fire" : "not_fire",
-        is_current: true,
+        status,
+        verification_outcome: isRealFire ? "auto_pass" : "rejected",
+        updated_at: new Date().toISOString(),
       }),
     });
+  }
 
-    if (isRealFire) {
+  let conflictDetected = false;
+  if (report.incident_id) {
+    const assessment = await supabaseRequest<
+      Array<{ conflict_detected: boolean }>
+    >("rpc/record_mpa_assessment", {
+      method: "POST",
+      body: JSON.stringify({
+        p_incident_id: report.incident_id,
+        p_contact_id: mpaContactId,
+        p_verdict: isRealFire ? "real_fire" : "not_fire",
+      }),
+    });
+    conflictDetected = assessment[0]?.conflict_detected === true;
+
+    if (isRealFire && !conflictDetected) {
       await supabaseRequest("escalations", {
         method: "POST",
         headers: { Prefer: "return=minimal" },
@@ -179,17 +172,25 @@ export async function classifyReport(
     }
   }
 
-  await supabaseRequest("training_labels", {
-    method: "POST",
-    headers: { Prefer: "return=minimal" },
-    body: JSON.stringify({
-      report_id: report.id,
-      label: isRealFire ? "valid" : "not_fire",
-      source: "mpa_consensus",
-    }),
-  });
+  if (report.verification_outcome === null) {
+    await supabaseRequest("training_labels", {
+      method: "POST",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({
+        report_id: report.id,
+        label: isRealFire ? "valid" : "not_fire",
+        source: "mpa_consensus",
+      }),
+    });
+  }
 
-  return { report, status, alreadyClassified: false, mpaContactId };
+  return {
+    report,
+    status,
+    alreadyClassified: report.verification_outcome !== null,
+    conflictDetected,
+    mpaContactId,
+  };
 }
 
 export function formatReportDetails(

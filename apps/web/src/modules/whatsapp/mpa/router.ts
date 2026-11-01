@@ -86,6 +86,9 @@ async function classifyPendingReport(
   const result = await classifyReport(reportId, isRealFire, contactId);
   if (!result) return "Laporan tidak ditemukan.";
   await setSession(contactId, "mpa_menu");
+  if (result.conflictDetected) {
+    return `Penilaian ${reportId} dicatat. Verdict MPA berbeda, sehingga insiden ditandai perlu ditinjau admin.`;
+  }
   if (result.alreadyClassified) {
     return `Laporan ${reportId} sudah pernah dinilai dengan status ${result.status}.`;
   }
@@ -111,6 +114,9 @@ async function classifyReportCommand(contactId: string, body: string) {
       : match[1];
   const result = await classifyReport(reportId, isRealFire, contactId);
   if (!result) return "ID laporan tidak ditemukan.";
+  if (result.conflictDetected) {
+    return `Penilaian ${reportId} dicatat. Verdict MPA berbeda, sehingga insiden ditandai perlu ditinjau admin.`;
+  }
   if (result.alreadyClassified) {
     return `Laporan ${reportId} sudah pernah dinilai dengan status ${result.status}.`;
   }

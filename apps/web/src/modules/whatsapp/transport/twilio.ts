@@ -75,6 +75,9 @@ export const twilioProvider: WhatsAppProvider = {
       from: whatsappAddress(env.twilioWhatsappFrom),
       to: whatsappAddress(to),
       body,
+      ...(env.twilioStatusCallbackUrl
+        ? { statusCallback: env.twilioStatusCallbackUrl }
+        : {}),
     });
     return { sid: message.sid };
   },
@@ -89,6 +92,9 @@ export const twilioProvider: WhatsAppProvider = {
           variables.map((value, index) => [String(index + 1), value]),
         ),
       ),
+      ...(env.twilioStatusCallbackUrl
+        ? { statusCallback: env.twilioStatusCallbackUrl }
+        : {}),
     });
     return { sid: message.sid };
   },

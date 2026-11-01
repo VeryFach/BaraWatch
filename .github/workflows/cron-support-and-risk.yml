@@ -1,0 +1,24 @@
+name: Weekly risk pipeline
+
+on:
+  schedule:
+    - cron: "0 1 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group:   weekly-risk
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run weekly risk route
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 1 * * 1'
+        env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail --silent --show-error --max-time 300 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_BASE_URL/api/cron/weekly-risk"

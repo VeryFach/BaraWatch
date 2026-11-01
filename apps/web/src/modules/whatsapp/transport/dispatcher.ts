@@ -1,6 +1,6 @@
 import { getServerEnv } from "@/lib/env";
 import { supabaseRequest } from "@/lib/supabase/admin";
-import { twilioProvider } from "./twilio";
+import { enqueueTextMessage, flushOutbox } from "./outbox";
 
 type Subscription = {
   contact_id: string;
@@ -36,32 +36,17 @@ export async function dispatchNewIncidentAlert(
     );
     if (alreadySent.length > 0) continue;
     const body = `🚨 Peringatan: Titik api baru terdeteksi di area ${regionName}. Mohon tetap waspada dan hindari area tersebut.`;
-    const message =
-      !recent && env.twilioAlertTemplateSid
-        ? await twilioProvider.sendTemplate(
-            contact.phone_e164,
-            env.twilioAlertTemplateSid,
-            [regionName],
-          )
-        : await twilioProvider.sendText(contact.phone_e164, body);
-    await supabaseRequest("wa_messages", {
-      method: "POST",
-      headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({
-        contact_id: subscription.contact_id,
-        direction: "out",
-        kind: "alert",
-        provider_sid: message.sid,
-        dedupe_key: dedupeKey,
-        template_name:
-          !recent && env.twilioAlertTemplateSid ? "alert_baru" : null,
-        body: !recent && env.twilioAlertTemplateSid ? null : body,
-        status: "sent",
-        handed_off_at: new Date().toISOString(),
-        incident_id: incidentId,
-      }),
+    const queuedId = await enqueueTextMessage({
+      contactId: subscription.contact_id,
+      body,
+      kind: "alert",
+      dedupeKey,
+      incidentId,
+      templateName:
+        !recent && env.twilioAlertTemplateSid ? "alert_baru" : undefined,
+      templateVariables: [regionName],
     });
-    sentCount++;
+    if (queuedId) sentCount += (await flushOutbox(1, queuedId)).sent;
   }
   return sentCount;
 }

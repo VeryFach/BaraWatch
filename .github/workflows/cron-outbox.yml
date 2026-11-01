@@ -1,0 +1,25 @@
+name: Flush WhatsApp outbox
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: whatsapp-outbox
+  cancel-in-progress: false
+
+jobs:
+  flush:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Flush protected outbox route
+        env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          test -n "$APP_BASE_URL" || { echo "APP_BASE_URL is not configured"; exit 1; }
+          test -n "$CRON_SECRET" || { echo "CRON_SECRET is not configured"; exit 1; }
+          curl --fail --silent --show-error --max-time 120 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_BASE_URL/api/cron/flush-outbox"

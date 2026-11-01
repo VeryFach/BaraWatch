@@ -4,7 +4,10 @@ import { getServerEnv } from "@/lib/env";
 import { supabaseRequest } from "@/lib/supabase/admin";
 import { inboundMessageExists } from "@/modules/whatsapp/data/db";
 import { routeInbound } from "@/modules/whatsapp/router";
-import { twilioProvider } from "@/modules/whatsapp/transport/twilio";
+import {
+  enqueueTextMessage,
+  flushOutbox,
+} from "@/modules/whatsapp/transport/outbox";
 
 function validTwilioSignature(
   url: string,
@@ -103,24 +106,16 @@ export async function POST(request: Request) {
     latitude: numberFrom(params.get("Latitude")),
     longitude: numberFrom(params.get("Longitude")),
   });
-  const sent = await twilioProvider.sendText(from, reply);
   const contacts = await supabaseRequest<{ id: string }[]>(
     `contacts?phone_e164=eq.${encodeURIComponent(from)}&select=id&limit=1`,
   );
   if (contacts[0]) {
-    await supabaseRequest("wa_messages", {
-      method: "POST",
-      headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({
-        contact_id: contacts[0].id,
-        direction: "out",
-        kind: "chat",
-        provider_sid: sent.sid,
-        body: reply,
-        status: "sent",
-        handed_off_at: new Date().toISOString(),
-      }),
+    const queuedId = await enqueueTextMessage({
+      contactId: contacts[0].id,
+      kind: "chat",
+      body: reply,
     });
+    await flushOutbox(1, queuedId);
   }
   return new NextResponse(null, { status: 204 });
 }
