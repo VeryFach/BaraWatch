@@ -152,6 +152,10 @@ export default function FireMap({
 }: Props) {
   const { desaList } = useApp();
   const liveHotspots = publicHotspots ?? [];
+  const riskByVillageId = useMemo(
+    () => new Map(desaList.map((village) => [village.id, village])),
+    [desaList],
+  );
   const reportGroups = useMemo(() => {
     const groups = new Map<string, LocatedReport[]>();
     const locatedReports = reports.filter(
@@ -212,27 +216,41 @@ export default function FireMap({
           ) : null,
         )}
       {showRisk &&
-        desaList
-          .filter((d) => !villageNames || villageNames.includes(d.nama))
-          .map((d) => (
-            <CircleMarker
-              key={d.id}
-              center={[d.lat, d.lng]}
-              radius={compact ? 16 : 26}
-              pathOptions={{
-                color: css(riskVar[d.risk]),
-                fillColor: css(riskVar[d.risk]),
-                fillOpacity: 0.22,
-                weight: 1,
-              }}
-            >
-              <Tooltip>
-                <b>{d.nama}</b> · Risiko {riskLabel[d.risk]}
-                <br />
-                {d.alasan}
-              </Tooltip>
-            </CircleMarker>
-          ))}
+        regions
+          .filter(
+            (region) =>
+              region.level === "desa" &&
+              region.geometry !== null &&
+              riskByVillageId.has(region.id),
+          )
+          .filter((region) => {
+            const village = riskByVillageId.get(region.id);
+            return (
+              !villageNames || (village && villageNames.includes(village.nama))
+            );
+          })
+          .map((region) => {
+            const village = riskByVillageId.get(region.id);
+            if (!village || !region.geometry) return null;
+            return (
+              <Polygon
+                key={`risk-${region.id}`}
+                positions={geoJsonToLeaflet(region.geometry)}
+                pathOptions={{
+                  color: css(riskVar[village.risk]),
+                  fillColor: css(riskVar[village.risk]),
+                  fillOpacity: compact ? 0.16 : 0.22,
+                  weight: 1,
+                }}
+              >
+                <Tooltip sticky>
+                  <b>{village.nama}</b> · Risiko {riskLabel[village.risk]}
+                  <br />
+                  {village.alasan}
+                </Tooltip>
+              </Polygon>
+            );
+          })}
       {showHotspots &&
         liveHotspots.map((h) => (
           <CircleMarker
