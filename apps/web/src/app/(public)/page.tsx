@@ -378,30 +378,40 @@ function PublicDashboard() {
     statusOf,
     hotspots,
     desaList,
+    regions,
     liveDataLoading,
     liveDataError,
     hotspotsLoading,
+    loadRegions,
   } = useApp();
 
   const [desa, setDesa] = useState("all");
   const [kabupaten, setKabupaten] = useState("all");
   const [kecamatan, setKecamatan] = useState("all");
   const kabupatenOptions = useMemo(
-    () => [...new Set(desaList.map((item) => item.kabupaten))].sort(),
-    [desaList],
+    () =>
+      regions
+        .filter((region) => region.level === "kabupaten")
+        .map((region) => region.name)
+        .sort(),
+    [regions],
   );
   const kecamatanOptions = useMemo(
     () =>
       [
         ...new Set(
-          desaList
+          regions
             .filter(
-              (item) => kabupaten === "all" || item.kabupaten === kabupaten,
+              (region) =>
+                region.level === "kecamatan" &&
+                (kabupaten === "all" ||
+                  regions.find((parent) => parent.id === region.parent_id)
+                    ?.name === kabupaten),
             )
-            .map((item) => item.kecamatan),
+            .map((region) => region.name),
         ),
       ].sort(),
-    [kabupaten, desaList],
+    [kabupaten, regions],
   );
   const desaOptions = useMemo(
     () =>
@@ -498,6 +508,9 @@ function PublicDashboard() {
               <div className="mt-2 grid gap-2 sm:grid-cols-3">
                 <SearchSelect
                   ariaLabel="Pilih kabupaten"
+                  onOpenChange={(open) => {
+                    if (open) void loadRegions("kabupaten");
+                  }}
                   value={kabupaten}
                   onChange={(value) => {
                     setKabupaten(value);
@@ -515,6 +528,9 @@ function PublicDashboard() {
                 />
                 <SearchSelect
                   ariaLabel="Pilih kecamatan"
+                  onOpenChange={(open) => {
+                    if (open) void loadRegions("kecamatan");
+                  }}
                   value={kecamatan}
                   onChange={(value) => {
                     setKecamatan(value);
@@ -531,6 +547,9 @@ function PublicDashboard() {
                 />
                 <SearchSelect
                   labelledBy="desa-label"
+                  onOpenChange={(open) => {
+                    if (open) void loadRegions("desa");
+                  }}
                   searchPlaceholder="Cari desa..."
                   value={desa}
                   onChange={setDesa}

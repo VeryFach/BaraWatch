@@ -180,7 +180,7 @@ export default function FireMap({
           .filter((d) => !villageNames || villageNames.includes(d.nama))
           .map((d) => (
             <CircleMarker
-              key={d.nama}
+              key={d.id}
               center={[d.lat, d.lng]}
               radius={compact ? 16 : 26}
               pathOptions={{

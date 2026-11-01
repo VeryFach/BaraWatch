@@ -49,6 +49,7 @@ function MapContent() {
     reportsLoading,
     reportsError,
     publicReports,
+    loadRegions,
   } = useApp();
   const router = useRouter();
   const selectedId = useSearchParams().get("id");
@@ -80,26 +81,28 @@ function MapContent() {
   }, [filters.kabupaten, filters.query, reports]);
   const districts = useMemo(
     () =>
-      [...reports.map((report) => report.region?.parent?.name ?? "")]
-        .filter(Boolean)
-        .filter((district, index, values) => values.indexOf(district) === index)
+      regions
+        .filter((region) => region.level === "kabupaten")
+        .map((region) => region.name)
         .sort(),
-    [reports],
+    [regions],
   );
   const kecamatans = useMemo(
     () =>
       [
         ...new Set(
-          desaList
+          regions
             .filter(
-              (desa) =>
-                filters.kabupaten === "all" ||
-                desa.kabupaten === filters.kabupaten,
+              (region) =>
+                region.level === "kecamatan" &&
+                (filters.kabupaten === "all" ||
+                  regions.find((parent) => parent.id === region.parent_id)
+                    ?.name === filters.kabupaten),
             )
-            .map((desa) => desa.kecamatan),
+            .map((region) => region.name),
         ),
       ].sort(),
-    [filters.kabupaten, desaList],
+    [filters.kabupaten, regions],
   );
   const villagesForFilter = useMemo(
     () =>
@@ -201,6 +204,9 @@ function MapContent() {
                 </div>
                 <SearchSelect
                   ariaLabel="Kabupaten / kota"
+                  onOpenChange={(open) => {
+                    if (open) void loadRegions("kabupaten");
+                  }}
                   value={filters.kabupaten}
                   onChange={updateKabupaten}
                   triggerClassName="text-black"
@@ -211,6 +217,9 @@ function MapContent() {
                 />
                 <SearchSelect
                   ariaLabel="Kecamatan"
+                  onOpenChange={(open) => {
+                    if (open) void loadRegions("kecamatan");
+                  }}
                   value={filters.kecamatan}
                   onChange={updateKecamatan}
                   triggerClassName="text-black"
@@ -224,6 +233,9 @@ function MapContent() {
                 />
                 <SearchSelect
                   ariaLabel="Desa"
+                  onOpenChange={(open) => {
+                    if (open) void loadRegions("desa");
+                  }}
                   value={filters.desa}
                   onChange={(v) => update("desa", v)}
                   triggerClassName="text-black"

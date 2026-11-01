@@ -31,6 +31,7 @@ export function SearchSelect({
   triggerClassName,
   contentClassName,
   align = "start",
+  onOpenChange,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -43,11 +44,18 @@ export function SearchSelect({
   triggerClassName?: string;
   contentClassName?: string;
   align?: "start" | "center" | "end";
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((option) => option.value === value);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        onOpenChange?.(nextOpen);
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           type="button"

@@ -79,6 +79,10 @@ interface Ctx {
   hotspotsLoading: boolean;
   incidentsLoading: boolean;
   regionsLoading: boolean;
+  loadRegions: (
+    level?: PublicRegionBoundary["level"],
+    parentId?: string,
+  ) => Promise<void>;
   risksLoading: boolean;
 }
 
@@ -101,7 +105,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [risks, setRisks] = useState<PublicRisk[]>([]);
   const [hotspotsLoading, setHotspotsLoading] = useState(true);
   const [incidentsLoading, setIncidentsLoading] = useState(true);
-  const [regionsLoading, setRegionsLoading] = useState(true);
+  const [regionsLoading, setRegionsLoading] = useState(false);
   const [risksLoading, setRisksLoading] = useState(true);
   const [liveDataError, setLiveDataError] = useState<string | null>(null);
 
@@ -150,12 +154,39 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setPublicIncidents,
       setIncidentsLoading,
     );
-    load("/api/public/regions", setRegions, setRegionsLoading);
     load("/api/public/risk", setRisks, setRisksLoading);
     return () => {
       active = false;
     };
   }, []);
+
+  const loadRegions = async (
+    level?: PublicRegionBoundary["level"],
+    parentId?: string,
+  ) => {
+    const params = new URLSearchParams();
+    if (level) params.set("level", level);
+    if (parentId) params.set("parent_id", parentId);
+    setRegionsLoading(true);
+    try {
+      const response = await fetch(
+        `/api/public/regions${params.size ? `?${params}` : ""}`,
+      );
+      if (!response.ok) throw new Error("Unable to load regions");
+      const { data } = (await response.json()) as {
+        data: PublicRegionBoundary[];
+      };
+      setRegions((previous) => {
+        const byId = new Map(previous.map((region) => [region.id, region]));
+        for (const region of data) byId.set(region.id, region);
+        return [...byId.values()];
+      });
+    } catch {
+      setLiveDataError("Wilayah belum dapat dimuat.");
+    } finally {
+      setRegionsLoading(false);
+    }
+  };
 
   const refreshReports = async () => {
     setReportsLoading(true);
@@ -252,6 +283,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     incidentsLoading,
     regionsLoading,
     risksLoading,
+    loadRegions,
   };
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;

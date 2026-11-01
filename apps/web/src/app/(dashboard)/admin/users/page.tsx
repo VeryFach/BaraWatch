@@ -80,6 +80,7 @@ export default function AdminUsersPage() {
     regionId: "",
   });
   const [creatingContact, setCreatingContact] = useState(false);
+  const [regionsLoading, setRegionsLoading] = useState(false);
 
   const loadUsers = useCallback(async () => {
     setUsersLoading(true);
@@ -101,23 +102,31 @@ export default function AdminUsersPage() {
 
   const loadContacts = useCallback(async () => {
     try {
-      const [contactsResponse, regionsResponse] = await Promise.all([
-        fetch("/api/admin/contacts"),
-        fetch("/api/public/regions"),
-      ]);
-      if (!contactsResponse.ok || !regionsResponse.ok) return;
+      const contactsResponse = await fetch("/api/admin/contacts");
+      if (!contactsResponse.ok) return;
       const contactsResult = (await contactsResponse.json()) as {
         data: Contact[];
       };
-      const regionsResult = (await regionsResponse.json()) as {
-        data: PublicRegionBoundary[];
-      };
       setContacts(contactsResult.data);
-      setRegions(regionsResult.data);
     } catch {
       // ignore
     }
   }, []);
+
+  const loadRegions = useCallback(async () => {
+    if (regions.length || regionsLoading) return;
+    setRegionsLoading(true);
+    try {
+      const response = await fetch("/api/public/regions?level=desa");
+      if (!response.ok) return;
+      const result = (await response.json()) as {
+        data: PublicRegionBoundary[];
+      };
+      setRegions(result.data);
+    } finally {
+      setRegionsLoading(false);
+    }
+  }, [regions.length, regionsLoading]);
 
   useEffect(() => {
     void loadUsers();
@@ -481,6 +490,7 @@ export default function AdminUsersPage() {
                   <select
                     required
                     value={contactForm.regionId}
+                    onFocus={() => void loadRegions()}
                     onChange={(event) =>
                       setContactForm({
                         ...contactForm,
@@ -490,6 +500,9 @@ export default function AdminUsersPage() {
                     className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
                   >
                     <option value="">Pilih desa/kelurahan</option>
+                    {regionsLoading && (
+                      <option value="">Memuat wilayah…</option>
+                    )}
                     {regions
                       .filter((region) => region.level !== "provinsi")
                       .map((region) => (
