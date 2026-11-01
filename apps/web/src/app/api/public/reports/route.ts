@@ -18,7 +18,6 @@ interface PublicReportRow {
   id: string;
   incident_id: string | null;
   status: PublicReport["status"];
-  verification_outcome: PublicReport["verification_outcome"];
   created_at: string;
   approx_geom: unknown;
 }
@@ -123,7 +122,7 @@ export async function GET(request: Request) {
   const filter = status ? `&status=eq.${encodeURIComponent(status)}` : "";
   const reportFilter = reportId ? `&id=eq.${encodeURIComponent(reportId)}` : "";
   const reports = await supabaseRequest<PublicReportRow[]>(
-    `public_reports_v?select=id,incident_id,status,verification_outcome,created_at,approx_geom&order=created_at.desc&limit=${limit}${filter}${reportFilter}`,
+    `public_reports_v?select=id,incident_id,status,created_at,approx_geom&order=created_at.desc&limit=${limit}${filter}${reportFilter}`,
   );
   const imageEligibleIds = reports.map((report) => report.id);
   const reportRegions = imageEligibleIds.length
@@ -184,7 +183,7 @@ export async function GET(request: Request) {
       longitude: coordinates?.longitude ?? null,
       observed_at: null,
       description: null,
-      verification_outcome: report.verification_outcome,
+      verification_outcome: null,
       verification_score: null,
       updated_at: null,
       media: mediaByReport.get(report.id) ?? [],
