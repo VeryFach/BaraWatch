@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { ClientMap } from "@/components/ClientMap";
 import { LawDashboard } from "@/components/LawDashboard";
 import { Button } from "@/components/ui/button";
+import type { PublicHotspot, PublicIncident } from "@/lib/public-api";
 import type { dashboardView } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 
@@ -101,13 +102,13 @@ function Stat({
 type TrendPoint = { hari: string; mentah: number; tersaring: number };
 
 function TrendCard({
-  data = [],
-  loading = false,
-  error = null,
+  data,
+  loading,
+  error,
 }: {
-  data?: TrendPoint[];
-  loading?: boolean;
-  error?: string | null;
+  data: TrendPoint[];
+  loading: boolean;
+  error: string | null;
 }) {
   return (
     <div className={cn(card, "p-6")}>
@@ -164,12 +165,26 @@ function TrendCard({
   );
 }
 
-function MapPreview() {
+function MapPreview({
+  hotspots,
+  incidents = [],
+  error,
+}: {
+  hotspots?: PublicHotspot[];
+  incidents?: PublicIncident[];
+  error?: string | null;
+}) {
+  const liveData = hotspots !== undefined;
   return (
     <div className={cn(card, "overflow-hidden")}>
       <SectionHead
         title="Peta sekilas"
-        sub="Titik api dan zona risiko desa"
+        sub={
+          error ??
+          (liveData
+            ? "Hotspot dan insiden dari database"
+            : "Titik api dan zona risiko desa")
+        }
         action={
           <Link
             href="/peta"
@@ -180,7 +195,14 @@ function MapPreview() {
         }
       />
       <div className="h-80">
-        <ClientMap showRisk showHotspots hideFalse compact />
+        <ClientMap
+          showRisk={!liveData}
+          showHotspots
+          hideFalse
+          compact
+          publicHotspots={hotspots}
+          publicIncidents={incidents}
+        />
       </div>
     </div>
   );
@@ -188,9 +210,18 @@ function MapPreview() {
 
 export function PetugasView() {
   const [incidents, setIncidents] = useState<OpsIncident[]>([]);
+  const [mapHotspots, setMapHotspots] = useState<PublicHotspot[]>([]);
+  const [mapIncidents, setMapIncidents] = useState<PublicIncident[]>([]);
+  const [teams, setTeams] = useState<OpsTeam[]>([]);
+  const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [supportLoading, setSupportLoading] = useState(true);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [teamsError, setTeamsError] = useState<string | null>(null);
+  const [trendError, setTrendError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const loadIncidents = useCallback(async () => {
+    setError(null);
     try {
       const response = await fetch("/api/ops/incidents");
       const result = (await response.json()) as {
@@ -213,6 +244,48 @@ export function PetugasView() {
   useEffect(() => {
     void loadIncidents();
   }, [loadIncidents]);
+  useEffect(() => {
+    let active = true;
+    const fetchData = async <T,>(url: string): Promise<T> => {
+      const response = await fetch(url, { cache: "no-store" });
+      const body = (await response.json()) as { data?: T; error?: string };
+      if (!response.ok || body.data === undefined) {
+        throw new Error(body.error ?? "Data dashboard tidak tersedia.");
+      }
+      return body.data;
+    };
+    const loadSupportData = async () => {
+      const results = await Promise.allSettled([
+        fetchData<PublicHotspot[]>("/api/public/hotspots?limit=200"),
+        fetchData<PublicIncident[]>("/api/public/incidents?limit=200"),
+        fetchData<TrendPoint[]>("/api/public/hotspot-trend"),
+        fetchData<OpsTeam[]>("/api/ops/teams"),
+      ]);
+      if (!active) return;
+      const [hotspotResult, incidentResult, trendResult, teamResult] = results;
+      if (hotspotResult.status === "fulfilled") {
+        setMapHotspots(hotspotResult.value);
+      } else {
+        setMapError("Data hotspot sedang tidak tersedia.");
+      }
+      if (incidentResult.status === "fulfilled") {
+        setMapIncidents(incidentResult.value);
+      } else {
+        setMapError(
+          (current) => current ?? "Data insiden peta sedang tidak tersedia.",
+        );
+      }
+      if (trendResult.status === "fulfilled") setTrend(trendResult.value);
+      else setTrendError("Data tren hotspot sedang tidak tersedia.");
+      if (teamResult.status === "fulfilled") setTeams(teamResult.value);
+      else setTeamsError("Data tim lapangan sedang tidak tersedia.");
+      setSupportLoading(false);
+    };
+    void loadSupportData();
+    return () => {
+      active = false;
+    };
+  }, []);
   const active = incidents.filter(
     (incident) => incident.status !== "extinguished",
   ).length;
@@ -232,41 +305,47 @@ export function PetugasView() {
       <section className="grid gap-4 sm:grid-cols-3">
         <Stat
           icon={Flame}
-          label="Titik aktif"
-          value={loading ? "…" : String(active)}
-          hint="Perlu dipantau"
+          label="Insiden aktif"
+          value={loading ? "…" : error ? "—" : String(active)}
+          hint={error ?? "Dari maks. 100 insiden operasional terbaru"}
           tone="bg-destructive/10 text-destructive"
         />
         <Stat
           icon={Check}
           label="Terverifikasi"
-          value={loading ? "…" : String(verified)}
-          hint="Api nyata"
+          value={loading ? "…" : error ? "—" : String(verified)}
+          hint={error ?? "Insiden dengan status terkonfirmasi"}
           tone="bg-forest/10 text-forest"
         />
         <Stat
           icon={ArrowUpRight}
-          label="Dapat dieskalasi"
+          label="Sedang ditangani"
           value={
             loading
               ? "…"
-              : String(
-                  incidents.filter(
-                    (incident) => incident.status === "in_progress",
-                  ).length,
-                )
+              : error
+                ? "—"
+                : String(
+                    incidents.filter(
+                      (incident) => incident.status === "in_progress",
+                    ).length,
+                  )
           }
-          hint="Ke BPBD"
+          hint={error ?? "Dari maks. 100 insiden terbaru"}
           tone="bg-risk-medium/20 text-foreground"
         />
       </section>
       <section className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
-          <MapPreview />
+          <MapPreview
+            hotspots={mapHotspots}
+            incidents={mapIncidents}
+            error={mapError}
+          />
         </div>
         <div className="space-y-6 lg:col-span-2">
-          <TeamCard />
-          <TrendCard />
+          <TeamCard teams={teams} loading={supportLoading} error={teamsError} />
+          <TrendCard data={trend} loading={supportLoading} error={trendError} />
         </div>
       </section>
       <OpsIncidentList
@@ -290,6 +369,14 @@ type OpsIncident = {
   first_detected_at: string;
   last_detected_at: string;
   closed_at: string | null;
+  regions: { name: string } | null;
+};
+
+type OpsTeam = {
+  id: string;
+  name: string;
+  agency: string | null;
+  is_active: boolean;
   regions: { name: string } | null;
 };
 
@@ -393,72 +480,52 @@ function OpsIncidentList({
   );
 }
 
-function TeamCard() {
-  const [resources, setResources] = useState<
-    {
-      id: string;
-      name: string;
-      agency: string | null;
-      region: string | null;
-      is_active: boolean;
-    }[]
-  >([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    void fetch("/api/ops/teams")
-      .then(async (response) => {
-        const result = (await response.json()) as {
-          data?: typeof resources;
-          error?: string;
-        };
-        if (!response.ok)
-          throw new Error(result.error ?? "Tim belum dapat dimuat.");
-        setResources(result.data ?? []);
-      })
-      .catch((loadError: unknown) =>
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Tim belum dapat dimuat.",
-        ),
-      )
-      .finally(() => setLoading(false));
-  }, []);
+function TeamCard({
+  teams,
+  loading,
+  error,
+}: {
+  teams: OpsTeam[];
+  loading: boolean;
+  error: string | null;
+}) {
   return (
     <div className={cn(card, "p-6")}>
       <h2 className="font-semibold">Tim di lapangan</h2>
       <ul className="mt-4 space-y-3">
-        {error && <li className="text-sm text-destructive">{error}</li>}
-        {loading &&
-          ["team-a", "team-b", "team-c"].map((key) => (
-            <li
-              key={key}
-              className="h-10 animate-pulse rounded-lg bg-muted/50"
-            />
-          ))}
-        {!loading && !error && resources.length === 0 && (
-          <li className="text-sm text-muted-foreground">
-            Belum ada tim aktif.
-          </li>
-        )}
-        {resources.map((resource) => (
+        {teams.map((team) => (
           <li
-            key={resource.id}
+            key={team.id}
             className="flex items-center justify-between gap-3 text-sm"
           >
             <div>
-              <div className="font-medium">{resource.name}</div>
+              <div className="font-medium">{team.name}</div>
               <div className="text-muted-foreground">
-                {resource.region ?? "Wilayah belum tersedia"} ·{" "}
-                {resource.agency ?? "Instansi belum tersedia"}
+                {team.agency ?? "Instansi belum dicatat"} ·{" "}
+                {team.regions?.name ?? "Wilayah belum tersedia"}
               </div>
             </div>
-            <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs">
-              {resource.is_active ? "Bertugas" : "Siaga"}
+            <span
+              className={cn(
+                "rounded-full px-2.5 py-0.5 text-xs",
+                team.is_active
+                  ? "bg-forest/10 text-forest"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
+              {team.is_active ? "Aktif" : "Nonaktif"}
             </span>
           </li>
         ))}
+        {loading && (
+          <li className="text-sm text-muted-foreground">Memuat data tim…</li>
+        )}
+        {error && <li className="text-sm text-destructive">{error}</li>}
+        {!loading && !error && teams.length === 0 && (
+          <li className="text-sm text-muted-foreground">
+            Belum ada tim lapangan yang terdaftar.
+          </li>
+        )}
       </ul>
     </div>
   );
@@ -552,7 +619,9 @@ export function AdminView() {
           hint={
             dashboardError
               ? "Data belum dapat dimuat"
-              : "Menunggu ditinjau · database"
+              : dashboard?.stats.pendingDemo
+                ? "DEMO · contoh karena antrean kosong"
+                : "Menunggu ditinjau · database"
           }
           tone="bg-risk-medium/20 text-foreground"
         />
@@ -569,7 +638,9 @@ export function AdminView() {
           hint={
             dashboardError
               ? "Data belum dapat dimuat"
-              : `+${dashboard?.stats.labelsThisWeek ?? 0} minggu ini · database`
+              : dashboard?.stats.labelsDemo
+                ? "DEMO · contoh 37 label minggu ini"
+                : `+${dashboard?.stats.labelsThisWeek ?? 0} minggu ini · database`
           }
           tone="bg-forest/10 text-forest"
         />
@@ -586,7 +657,9 @@ export function AdminView() {
           hint={
             dashboardError
               ? "Data belum dapat dimuat"
-              : "Metrik evaluasi filter · database"
+              : dashboard?.stats.precisionDemo
+                ? "DEMO · belum ada evaluasi filter"
+                : "Metrik evaluasi filter · database"
           }
           tone="bg-primary/10 text-accent-foreground"
         />
@@ -603,7 +676,9 @@ export function AdminView() {
           hint={
             dashboardError
               ? "Status belum dapat dimuat"
-              : "Job pipeline terakhir · database"
+              : dashboard?.sources.some((source) => source.demo)
+                ? "DEMO · status pipeline contoh"
+                : "Job pipeline terakhir · database"
           }
           tone="bg-destructive/10 text-destructive"
         />
@@ -631,7 +706,9 @@ export function AdminView() {
             </p>
           ) : pending.length === 0 ? (
             <p className="px-6 pb-6 text-sm text-muted-foreground">
-              Tidak ada laporan pending yang perlu ditinjau.
+              {dashboard?.stats.pendingDemo
+                ? "Belum ada laporan pending; angka pada kartu hanya data contoh."
+                : "Tidak ada laporan pending yang perlu ditinjau."}
             </p>
           ) : (
             <ul className="divide-y">
@@ -765,9 +842,13 @@ export function AdminView() {
                       : "text-muted-foreground"
                   }
                 >
-                  {source.status === "unknown"
-                    ? "Belum ada run"
-                    : `${source.status}${source.started_at ? ` · ${new Date(source.started_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })}` : ""}`}
+                  {source.demo
+                    ? source.status === "unknown"
+                      ? "DEMO · Belum ada run"
+                      : `DEMO · ${source.status === "failed" ? "Gagal" : "OK"}`
+                    : source.status === "unknown"
+                      ? "Belum ada run"
+                      : `${source.status}${source.started_at ? ` · ${new Date(source.started_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })}` : ""}`}
                 </span>
               </li>
             ))}
@@ -795,14 +876,14 @@ export function HukumView() {
     <>
       <header>
         <p className="text-sm text-muted-foreground">
-          Analisis kepemilikan dan dampak lahan
+          Insiden selesai, estimasi burn area, irisan konsesi, dan catatan
+          telaah
         </p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-          Verifikasi kepemilikan lahan
+          Telaah insiden dan bukti spasial
         </h1>
       </header>
       <LawDashboard />
-      <MapPreview />
     </>
   );
 }
