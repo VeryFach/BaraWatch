@@ -5,6 +5,7 @@ import {
   CircleMarker,
   MapContainer,
   Marker,
+  Pane,
   Polygon,
   Popup,
   TileLayer,
@@ -187,136 +188,145 @@ export default function FireMap({
         attribution="&copy; OpenStreetMap contributors"
         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      {regions
-        .filter(
-          (region) =>
-            region.geometry !== null && regionLevels.includes(region.level),
-        )
-        .map((region) =>
-          region.geometry ? (
-            <Polygon
-              key={region.id}
-              positions={geoJsonToLeaflet(region.geometry)}
-              pathOptions={{
-                color: css(
-                  region.level === "kabupaten"
-                    ? "var(--primary)"
-                    : region.level === "kecamatan"
-                      ? "var(--forest)"
-                      : "var(--risk-medium)",
-                ),
-                weight: region.level === "kabupaten" ? 2 : 1,
-                fillOpacity: 0.04,
-              }}
-            >
-              <Tooltip sticky>
-                {region.level} · {region.name}
-              </Tooltip>
-            </Polygon>
-          ) : null,
-        )}
-      {showRisk &&
-        regions
+      {/* Keep async risk updates below detection markers regardless of SVG insertion order. */}
+      <Pane name="barawatch-boundaries" style={{ zIndex: 350 }}>
+        {regions
           .filter(
             (region) =>
-              region.level === "desa" &&
-              region.geometry !== null &&
-              riskByVillageId.has(region.id),
+              region.geometry !== null && regionLevels.includes(region.level),
           )
-          .filter((region) => {
-            const village = riskByVillageId.get(region.id);
-            return (
-              !villageNames || (village && villageNames.includes(village.nama))
-            );
-          })
-          .map((region) => {
-            const village = riskByVillageId.get(region.id);
-            if (!village || !region.geometry) return null;
-            return (
+          .map((region) =>
+            region.geometry ? (
               <Polygon
-                key={`risk-${region.id}`}
+                key={region.id}
                 positions={geoJsonToLeaflet(region.geometry)}
                 pathOptions={{
-                  color: css(riskVar[village.risk]),
-                  fillColor: css(riskVar[village.risk]),
-                  fillOpacity: compact ? 0.16 : 0.22,
-                  weight: 1,
+                  color: css(
+                    region.level === "kabupaten"
+                      ? "var(--primary)"
+                      : region.level === "kecamatan"
+                        ? "var(--forest)"
+                        : "var(--risk-medium)",
+                  ),
+                  weight: region.level === "kabupaten" ? 2 : 1,
+                  fillOpacity: 0.04,
                 }}
               >
                 <Tooltip sticky>
-                  <b>{village.nama}</b> · Risiko {riskLabel[village.risk]}
-                  <br />
-                  {village.alasan}
+                  {region.level} · {region.name}
                 </Tooltip>
               </Polygon>
-            );
-          })}
-      {showHotspots &&
-        liveHotspots.map((h) => (
-          <CircleMarker
-            key={`live-hotspot-${h.id}`}
-            center={[h.latitude, h.longitude]}
-            radius={selectedId === h.id ? 10 : 6}
-            eventHandlers={{ click: () => onSelectPublicHotspot?.(h) }}
-            pathOptions={{
-              color: css("var(--map-marker-stroke)"),
-              weight: 2,
-              fillColor: css("var(--risk-extreme)"),
-              fillOpacity: 1,
-            }}
-          >
-            <Popup>
-              <b>{h.regionName ?? "Hotspot FIRMS"}</b>
-              <br />
-              {new Date(h.acqAt).toLocaleString("id-ID", {
-                timeZone: "Asia/Jakarta",
-              })}{" "}
-              WIB
-              <br />
-              {h.satellite} · {h.instrument}
-              <br />
-              Confidence {h.confidenceLevel ?? "tidak diketahui"}
-              {h.frp === null ? "" : ` · FRP ${h.frp} MW`}
-            </Popup>
-          </CircleMarker>
-        ))}
-      {showHotspots &&
-        liveHotspots.length > 0 &&
-        publicIncidents
-          .filter(
-            (incident) =>
-              incident.latitude !== null && incident.longitude !== null,
-          )
-          .map((incident) => (
+            ) : null,
+          )}
+      </Pane>
+      <Pane name="barawatch-risk" style={{ zIndex: 400 }}>
+        {showRisk &&
+          regions
+            .filter(
+              (region) =>
+                region.level === "desa" &&
+                region.geometry !== null &&
+                riskByVillageId.has(region.id),
+            )
+            .filter((region) => {
+              const village = riskByVillageId.get(region.id);
+              return (
+                !villageNames ||
+                (village && villageNames.includes(village.nama))
+              );
+            })
+            .map((region) => {
+              const village = riskByVillageId.get(region.id);
+              if (!village || !region.geometry) return null;
+              return (
+                <Polygon
+                  key={`risk-${region.id}`}
+                  positions={geoJsonToLeaflet(region.geometry)}
+                  pathOptions={{
+                    color: css(riskVar[village.risk]),
+                    fillColor: css(riskVar[village.risk]),
+                    fillOpacity: compact ? 0.16 : 0.22,
+                    weight: 1,
+                  }}
+                >
+                  <Tooltip sticky>
+                    <b>{village.nama}</b> · Risiko {riskLabel[village.risk]}
+                    <br />
+                    {village.alasan}
+                  </Tooltip>
+                </Polygon>
+              );
+            })}
+      </Pane>
+      <Pane name="barawatch-hotspots" style={{ zIndex: 500 }}>
+        {showHotspots &&
+          liveHotspots.map((h) => (
             <CircleMarker
-              key={`live-incident-${incident.id}`}
-              center={[
-                incident.latitude as number,
-                incident.longitude as number,
-              ]}
-              radius={11}
+              key={`live-hotspot-${h.id}`}
+              center={[h.latitude, h.longitude]}
+              radius={selectedId === h.id ? 10 : 6}
+              eventHandlers={{ click: () => onSelectPublicHotspot?.(h) }}
               pathOptions={{
-                color: css("var(--primary)"),
-                fillColor: css("var(--primary)"),
-                fillOpacity: 0.75,
+                color: css("var(--map-marker-stroke)"),
                 weight: 2,
+                fillColor: css("var(--risk-extreme)"),
+                fillOpacity: 1,
               }}
             >
               <Popup>
-                <b>
-                  Insiden · {incident.regionName ?? "Wilayah belum tersedia"}
-                </b>
+                <b>{h.regionName ?? "Hotspot FIRMS"}</b>
                 <br />
-                {incident.hotspotCount} hotspot · {incident.status}
-                <br />
-                Terakhir terdeteksi{" "}
-                {new Date(incident.lastDetectedAt).toLocaleString("id-ID", {
+                {new Date(h.acqAt).toLocaleString("id-ID", {
                   timeZone: "Asia/Jakarta",
                 })}{" "}
                 WIB
+                <br />
+                {h.satellite} · {h.instrument}
+                <br />
+                Confidence {h.confidenceLevel ?? "tidak diketahui"}
+                {h.frp === null ? "" : ` · FRP ${h.frp} MW`}
               </Popup>
             </CircleMarker>
           ))}
+      </Pane>
+      <Pane name="barawatch-incidents" style={{ zIndex: 550 }}>
+        {showHotspots &&
+          publicIncidents
+            .filter(
+              (incident) =>
+                incident.latitude !== null && incident.longitude !== null,
+            )
+            .map((incident) => (
+              <CircleMarker
+                key={`live-incident-${incident.id}`}
+                center={[
+                  incident.latitude as number,
+                  incident.longitude as number,
+                ]}
+                radius={11}
+                pathOptions={{
+                  color: css("var(--primary)"),
+                  fillColor: css("var(--primary)"),
+                  fillOpacity: 0.75,
+                  weight: 2,
+                }}
+              >
+                <Popup>
+                  <b>
+                    Insiden · {incident.regionName ?? "Wilayah belum tersedia"}
+                  </b>
+                  <br />
+                  {incident.hotspotCount} hotspot · {incident.status}
+                  <br />
+                  Terakhir terdeteksi{" "}
+                  {new Date(incident.lastDetectedAt).toLocaleString("id-ID", {
+                    timeZone: "Asia/Jakarta",
+                  })}{" "}
+                  WIB
+                </Popup>
+              </CircleMarker>
+            ))}
+      </Pane>
       {showReports &&
         reportGroups.map((group) => {
           const first = group[0];
