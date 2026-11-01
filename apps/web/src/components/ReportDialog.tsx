@@ -1,3 +1,6 @@
+"use client";
+
+import dynamic from "next/dynamic";
 import {
   type ChangeEvent,
   type FormEvent,
@@ -8,6 +11,7 @@ import {
 import { toast } from "sonner";
 import { useApp } from "@/components/AppState";
 import { SearchSelect } from "@/components/SearchSelect";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +23,14 @@ import {
 import type { PublicRegion } from "@/lib/public-api";
 import { cn } from "@/lib/utils";
 
+const ReportLocationPicker = dynamic(
+  () =>
+    import("@/components/ReportLocationPicker").then(
+      (module) => module.ReportLocationPicker,
+    ),
+  { ssr: false },
+);
+
 export function ReportDialog({
   children,
   defaultDesa,
@@ -28,6 +40,7 @@ export function ReportDialog({
 }) {
   const { refreshReports } = useApp();
   const [open, setOpen] = useState(false);
+  const [locationMapOpen, setLocationMapOpen] = useState(false);
   const [regionId, setRegionId] = useState("");
   const [phone, setPhone] = useState("");
   const [latitude, setLatitude] = useState("");
@@ -39,6 +52,13 @@ export function ReportDialog({
   const [catatan, setCatatan] = useState("");
   const [foto, setFoto] = useState<File | null>(null);
   const [publicPhotoConsent, setPublicPhotoConsent] = useState(false);
+  const coordinates =
+    latitude && longitude
+      ? {
+          latitude: Number(latitude),
+          longitude: Number(longitude),
+        }
+      : null;
 
   useEffect(() => {
     if (!open) return;
@@ -171,7 +191,7 @@ export function ReportDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-md overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Laporkan api atau asap</DialogTitle>
           <DialogDescription>
@@ -245,6 +265,25 @@ export function ReportDialog({
                 Gunakan lokasi saya
               </button>
             </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-start text-black"
+              onClick={() => setLocationMapOpen(true)}
+            >
+              {coordinates
+                ? "Ubah titik lokasi di peta"
+                : "Pilih titik lokasi di peta"}
+            </Button>
+            {coordinates ? (
+              <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+                Titik dipilih: {latitude}, {longitude}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Pilih titik pada peta sebelum mengirim laporan.
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <label>
                 <span className="text-xs text-muted-foreground">Latitude</span>
@@ -255,8 +294,9 @@ export function ReportDialog({
                   min="-90"
                   max="90"
                   value={latitude}
-                  onChange={(event) => setLatitude(event.target.value)}
-                  className="mt-1 h-10 w-full rounded-xl border bg-background px-3 text-black placeholder:text-gray-500"
+                  readOnly
+                  placeholder="Pilih titik di peta"
+                  className="mt-1 h-10 w-full rounded-xl border bg-muted px-3 text-black placeholder:text-gray-500"
                 />
               </label>
               <label>
@@ -268,8 +308,9 @@ export function ReportDialog({
                   min="-180"
                   max="180"
                   value={longitude}
-                  onChange={(event) => setLongitude(event.target.value)}
-                  className="mt-1 h-10 w-full rounded-xl border bg-background px-3 text-black placeholder:text-gray-500"
+                  readOnly
+                  placeholder="Pilih titik di peta"
+                  className="mt-1 h-10 w-full rounded-xl border bg-muted px-3 text-black placeholder:text-gray-500"
                 />
               </label>
             </div>
@@ -329,6 +370,41 @@ export function ReportDialog({
           </button>
         </form>
       </DialogContent>
+      <Dialog open={locationMapOpen} onOpenChange={setLocationMapOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Pilih titik lokasi</DialogTitle>
+            <DialogDescription>
+              Klik lokasi kejadian pada peta. Koordinat akan diperbarui
+              otomatis.
+            </DialogDescription>
+          </DialogHeader>
+          <ReportLocationPicker
+            value={coordinates}
+            onChange={({
+              latitude: nextLatitude,
+              longitude: nextLongitude,
+            }) => {
+              setLatitude(String(nextLatitude));
+              setLongitude(String(nextLongitude));
+            }}
+          />
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              {coordinates
+                ? `${latitude}, ${longitude}`
+                : "Belum ada titik dipilih"}
+            </p>
+            <Button
+              type="button"
+              disabled={!coordinates}
+              onClick={() => setLocationMapOpen(false)}
+            >
+              Gunakan titik ini
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
