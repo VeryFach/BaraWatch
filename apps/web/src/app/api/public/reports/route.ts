@@ -91,6 +91,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const regionId = searchParams.get("region_id");
+  const reportId = searchParams.get("report_id");
   const limit = Math.min(
     Math.max(Number(searchParams.get("limit") ?? 50) || 50, 1),
     100,
@@ -112,9 +113,16 @@ export async function GET(request: Request) {
       { status: 400 },
     );
   }
+  if (reportId && !UUID.test(reportId)) {
+    return NextResponse.json(
+      { error: "Parameter report_id tidak valid." },
+      { status: 400 },
+    );
+  }
   const filter = status ? `&status=eq.${encodeURIComponent(status)}` : "";
+  const reportFilter = reportId ? `&id=eq.${encodeURIComponent(reportId)}` : "";
   const reports = await supabaseRequest<PublicReportRow[]>(
-    `public_reports_v?select=id,incident_id,status,created_at,approx_geom&order=created_at.desc&limit=${limit}${filter}`,
+    `public_reports_v?select=id,incident_id,status,created_at,approx_geom&order=created_at.desc&limit=${limit}${filter}${reportFilter}`,
   );
   const imageEligibleIds = reports.map((report) => report.id);
   const reportRegions = imageEligibleIds.length
@@ -187,7 +195,9 @@ export async function GET(request: Request) {
             parent: parent
               ? { id: parent.id, name: parent.name, level: parent.level }
               : null,
-            district: district ? { id: district.id, name: district.name } : null,
+            district: district
+              ? { id: district.id, name: district.name }
+              : null,
           }
         : null,
     };

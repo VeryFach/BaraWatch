@@ -9,6 +9,12 @@ import { useApp } from "@/components/AppState";
 import { ReportDialog } from "@/components/ReportDialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   type Activity,
   type ActivityFilters,
   buildActivities,
@@ -19,8 +25,9 @@ import { cn } from "@/lib/utils";
 function ReportsPageContent() {
   const { laporan, reportsLoading, reportsError } = useApp();
   const searchParams = useSearchParams();
+  const linkedReportId = searchParams.get("report_id");
   const [filters, setFilters] = useState<ActivityFilters>({
-    query: "",
+    query: linkedReportId ?? "",
     jenis: "semua",
     status: "all",
     kabupaten: "all",
@@ -30,7 +37,6 @@ function ReportsPageContent() {
   });
   const [open, setOpen] = useState<string | null>(null);
   const allActivities = useMemo(() => buildActivities(laporan), [laporan]);
-  const linkedReportId = searchParams.get("report_id");
   const activities = useMemo(
     () => filterActivities(allActivities, filters),
     [allActivities, filters],
@@ -107,6 +113,18 @@ function ReportsPageContent() {
           <option value="semua">Semua jenis</option>
           <option value="laporan">Laporan warga</option>
           <option value="kejadian">Kejadian satelit</option>
+        </select>
+        <select
+          value={filters.status}
+          onChange={(e) =>
+            setFilters((p) => ({ ...p, status: e.target.value }))
+          }
+          className="h-10 rounded-md border bg-background px-3 text-sm text-black"
+        >
+          <option value="all">Semua status</option>
+          <option value="menunggu">Ditinjau</option>
+          <option value="diterima">Diterima</option>
+          <option value="ditolak">Tidak valid</option>
         </select>
         <select
           value={filters.kabupaten}
@@ -216,88 +234,119 @@ function ActivityRow({
   open: boolean;
   onToggle: () => void;
 }) {
+  const [imageOpen, setImageOpen] = useState(false);
+  const imageUrl =
+    activity.kind === "laporan" ? activity.report.imageUrl : null;
   return (
-    <li
-      className={cn(
-        "overflow-hidden rounded-xl border bg-card",
-        open && "border-primary/40",
-      )}
-    >
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center gap-4 p-4 text-left hover:bg-muted/50 sm:p-5"
-      >
-        <span
-          className={cn(
-            "hidden size-10 shrink-0 items-center justify-center rounded-lg sm:flex",
-            activity.kind === "kejadian"
-              ? "bg-destructive/10 text-destructive"
-              : "bg-forest/10 text-forest",
-          )}
-        >
-          {activity.kind === "kejadian" ? (
-            <Flame className="size-5" />
-          ) : (
-            <Megaphone className="size-5" />
-          )}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-xs text-muted-foreground">
-            {activity.id} ·{" "}
-            {activity.kind === "laporan"
-              ? "Laporan masyarakat"
-              : "Kejadian satelit"}{" "}
-            · {activity.waktu} WIB
-          </span>
-          <strong className="mt-1 block">{activity.title}</strong>
-          <span className="mt-1 block text-xs text-muted-foreground">
-            {activity.kabupaten}
-          </span>
-        </span>
-        {activity.kind === "kejadian" ? (
-          <StatusBadge status={activity.status} />
-        ) : (
-          <span className="rounded-full bg-risk-medium/20 px-2.5 py-0.5 text-xs">
-            {activity.status === "menunggu"
-              ? "Ditinjau"
-              : activity.status === "diterima"
-                ? "Diterima"
-                : "Tidak valid"}
-          </span>
+    <>
+      <li
+        className={cn(
+          "overflow-hidden rounded-xl border bg-card",
+          open && "border-primary/40",
         )}
-        <ChevronDown
-          className={cn(
-            "size-4 shrink-0 text-muted-foreground transition-transform",
-            open && "rotate-180",
+      >
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex w-full items-center gap-4 p-4 text-left hover:bg-muted/50 sm:p-5"
+        >
+          <span
+            className={cn(
+              "hidden size-10 shrink-0 items-center justify-center rounded-lg sm:flex",
+              activity.kind === "kejadian"
+                ? "bg-destructive/10 text-destructive"
+                : "bg-forest/10 text-forest",
+            )}
+          >
+            {activity.kind === "kejadian" ? (
+              <Flame className="size-5" />
+            ) : (
+              <Megaphone className="size-5" />
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs text-muted-foreground">
+              {activity.id} ·{" "}
+              {activity.kind === "laporan"
+                ? "Laporan masyarakat"
+                : "Kejadian satelit"}{" "}
+              · {activity.waktu} WIB
+            </span>
+            <strong className="mt-1 block">{activity.title}</strong>
+            <span className="mt-1 block text-xs text-muted-foreground">
+              {activity.kabupaten}
+            </span>
+          </span>
+          {activity.kind === "kejadian" ? (
+            <StatusBadge status={activity.status} />
+          ) : (
+            <span className="rounded-full bg-risk-medium/20 px-2.5 py-0.5 text-xs">
+              {activity.status === "menunggu"
+                ? "Ditinjau"
+                : activity.status === "diterima"
+                  ? "Diterima"
+                  : "Tidak valid"}
+            </span>
           )}
-        />
-      </button>
-      {open && (
-        <div className="grid gap-6 border-t bg-muted/20 p-5 md:grid-cols-2">
-          <ActivityProgress activity={activity} />
-          <div className="text-sm">
-            {activity.kind === "laporan" && activity.report.imageUrl && (
-              // biome-ignore lint/performance/noImgElement: signed storage URLs are dynamic.
-              <img
-                src={activity.report.imageUrl}
-                alt={`Bukti foto ${activity.report.id}`}
-                className="mb-4 aspect-video w-full rounded-xl object-cover"
-              />
+          <ChevronDown
+            className={cn(
+              "size-4 shrink-0 text-muted-foreground transition-transform",
+              open && "rotate-180",
             )}
-            <h2 className="font-semibold">Detail aktivitas</h2>
-            <p className="mt-3 text-muted-foreground">{activity.summary}</p>
-            {activity.kind === "kejadian" && (
-              <Link
-                href={`/peta?id=${encodeURIComponent(activity.id)}`}
-                className="mt-4 inline-block text-primary hover:underline"
-              >
-                Lihat di peta →
-              </Link>
-            )}
+          />
+        </button>
+        {open && (
+          <div className="grid gap-6 border-t bg-muted/20 p-5 md:grid-cols-2">
+            <ActivityProgress activity={activity} />
+            <div className="text-sm">
+              {imageUrl && (
+                <button
+                  type="button"
+                  onClick={() => setImageOpen(true)}
+                  className="mb-4 block w-full cursor-zoom-in text-left"
+                  aria-label="Perbesar foto bukti"
+                >
+                  {/* biome-ignore lint/performance/noImgElement: signed storage URLs are dynamic. */}
+                  <img
+                    src={imageUrl}
+                    alt={`Bukti foto ${activity.id}`}
+                    className="aspect-video w-full rounded-xl object-cover transition-opacity hover:opacity-90"
+                  />
+                  <span className="mt-2 block text-xs text-muted-foreground">
+                    Klik foto untuk memperbesar
+                  </span>
+                </button>
+              )}
+              <h2 className="font-semibold">Detail aktivitas</h2>
+              <p className="mt-3 text-muted-foreground">{activity.summary}</p>
+              {activity.kind === "kejadian" && (
+                <Link
+                  href={`/peta?id=${encodeURIComponent(activity.id)}`}
+                  className="mt-4 inline-block text-primary hover:underline"
+                >
+                  Lihat di peta →
+                </Link>
+              )}
+            </div>
           </div>
-        </div>
+        )}
+      </li>
+      {imageUrl && (
+        <Dialog open={imageOpen} onOpenChange={setImageOpen}>
+          <DialogContent className="max-w-6xl border-0 bg-black/95 p-3 sm:p-5">
+            <DialogTitle className="sr-only">Foto bukti laporan</DialogTitle>
+            <DialogDescription className="sr-only">
+              Foto bukti laporan diperbesar untuk audit.
+            </DialogDescription>
+            {/* biome-ignore lint/performance/noImgElement: signed storage URLs are dynamic. */}
+            <img
+              src={imageUrl}
+              alt={`Foto bukti laporan ${activity.id}`}
+              className="max-h-[85dvh] w-full object-contain"
+            />
+          </DialogContent>
+        </Dialog>
       )}
-    </li>
+    </>
   );
 }
