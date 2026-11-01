@@ -41,8 +41,9 @@ export function ReportDialog({
   const [publicPhotoConsent, setPublicPhotoConsent] = useState(false);
 
   useEffect(() => {
+    if (!open) return;
     let active = true;
-    fetch("/api/public/regions")
+    fetch("/api/public/regions?level=desa")
       .then(async (response) => {
         if (!response.ok) throw new Error("Unable to load regions");
         return (await response.json()) as { data: PublicRegion[] };
@@ -66,7 +67,7 @@ export function ReportDialog({
     return () => {
       active = false;
     };
-  }, [defaultDesa]);
+  }, [defaultDesa, open]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

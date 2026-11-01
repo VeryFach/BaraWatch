@@ -10,7 +10,7 @@ import {
 import { toast } from "sonner";
 import { useApp } from "@/components/AppState";
 import { Button } from "@/components/ui/button";
-import type { Hotspot } from "@/lib/dummy-data";
+import type { Hotspot } from "@/lib/ui-data";
 
 export function HotspotDetails({ hotspot: h }: { hotspot: Hotspot }) {
   const { can, statusOf, setStatus, escalated, escalate } = useApp();

@@ -26,13 +26,13 @@ import { ClientMap } from "@/components/ClientMap";
 import { ReportDialog } from "@/components/ReportDialog";
 import { SearchSelect } from "@/components/SearchSelect";
 import { RiskDot } from "@/components/StatusBadge";
-import { type Risk, riskLabel, riskVar } from "@/lib/dummy-data";
 import type {
   PublicHotspot,
   PublicIncident,
   PublicRegion,
 } from "@/lib/public-api";
 import { dashboardView, roles } from "@/lib/roles";
+import { type Risk, riskLabel, riskVar } from "@/lib/ui-data";
 
 import { cn } from "@/lib/utils";
 

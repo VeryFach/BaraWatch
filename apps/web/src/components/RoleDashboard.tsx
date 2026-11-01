@@ -166,12 +166,10 @@ function TrendCard({
 }
 
 function MapPreview({
-  showKonsesi = false,
   hotspots,
   incidents = [],
   error,
 }: {
-  showKonsesi?: boolean;
   hotspots?: PublicHotspot[];
   incidents?: PublicIncident[];
   error?: string | null;
@@ -202,7 +200,6 @@ function MapPreview({
           showHotspots
           hideFalse
           compact
-          showKonsesi={showKonsesi}
           publicHotspots={hotspots}
           publicIncidents={incidents}
         />
@@ -879,14 +876,14 @@ export function HukumView() {
     <>
       <header>
         <p className="text-sm text-muted-foreground">
-          Analisis kepemilikan dan dampak lahan
+          Insiden selesai, estimasi burn area, irisan konsesi, dan catatan
+          telaah
         </p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-          Verifikasi kepemilikan lahan
+          Telaah insiden dan bukti spasial
         </h1>
       </header>
       <LawDashboard />
-      <MapPreview showKonsesi />
     </>
   );
 }

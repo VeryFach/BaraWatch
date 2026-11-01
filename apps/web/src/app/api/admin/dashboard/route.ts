@@ -38,14 +38,6 @@ const sourceDefinitions = [
   { job: "retrain", name: "Pelatihan model" },
 ] as const;
 
-const demoSources = [
-  { job: "firms", status: "success", started_at: "", error: null },
-  { job: "radd", status: "success", started_at: "", error: null },
-  { job: "support_data", status: "success", started_at: "", error: null },
-  { job: "weekly_risk", status: "unknown", started_at: "", error: null },
-  { job: "retrain", status: "success", started_at: "", error: null },
-] as const;
-
 export async function GET() {
   await connection();
   const supabase = await createClient();
@@ -259,13 +251,12 @@ export async function GET() {
         error: latest.error,
         demo: false,
       };
-    const demo = demoSources.find((run) => run.job === source.job);
     return {
       name: source.name,
-      status: demo?.status ?? "unknown",
+      status: "unknown" as const,
       started_at: null,
       error: null,
-      demo: true,
+      demo: false,
     };
   });
 
@@ -316,13 +307,13 @@ export async function GET() {
   const actualPending = pendingCount ?? 0;
   const actualLabels = labelCount ?? 0;
   const stats = {
-    pending: actualPending || 6,
-    pendingDemo: actualPending === 0,
-    labels: actualLabels || 1284,
-    labelsThisWeek: actualLabels === 0 ? 37 : (labelsThisWeek ?? 0),
-    labelsDemo: actualLabels === 0,
-    filterPrecision: actualFilterPrecision ?? 0.81,
-    precisionDemo: actualFilterPrecision === null,
+    pending: actualPending,
+    pendingDemo: false,
+    labels: actualLabels,
+    labelsThisWeek: labelsThisWeek ?? 0,
+    labelsDemo: false,
+    filterPrecision: actualFilterPrecision ?? 0,
+    precisionDemo: false,
   };
   return NextResponse.json({
     data: { reports: reportData, trend, stats, sources: sourceRuns },

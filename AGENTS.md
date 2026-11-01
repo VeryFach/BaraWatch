@@ -149,7 +149,7 @@ Konvensi awal. Sesuaikan jika hasil scaffold berbeda.
 
 ```text
 # web (apps/web)
-pnpm dev | pnpm lint | pnpm typecheck | pnpm test
+npm run dev | npm run lint | npm run build | npm run format
 
 # ai-service (apps/ai-service)
 uvicorn app.main:app --reload | ruff check . | pytest

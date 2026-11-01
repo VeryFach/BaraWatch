@@ -1,4 +1,4 @@
-import { type Hotspot, type HotspotStatus, hotspots } from "@/lib/dummy-data";
+import type { Hotspot, HotspotStatus } from "@/lib/ui-data";
 
 export type OwnershipStatus =
   | "belum-diverifikasi"
@@ -42,6 +42,7 @@ export function ownerHoldings(
   ownerId: string,
   reviews: OwnershipReviews,
   statusOf: (id: string) => HotspotStatus,
+  hotspots: Hotspot[],
 ) {
   const parcels = landParcels.filter(
     (p) => parcelOwnerId(p, reviews) === ownerId,
@@ -65,6 +66,7 @@ export interface LandCase {
 export function buildLandCases(
   reviews: OwnershipReviews,
   statusOf: (id: string) => HotspotStatus,
+  hotspots: Hotspot[],
 ): LandCase[] {
   return landParcels
     .flatMap<LandCase>((parcel) => {

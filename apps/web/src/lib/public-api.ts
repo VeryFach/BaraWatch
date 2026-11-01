@@ -23,13 +23,33 @@ export interface PublicIncident {
   regionCode: string | null;
   regionName: string | null;
   source: "satellite" | "report" | "both";
-  status: "new" | "confirmed" | "escalated" | "in_progress" | "contained" | "extinguished" | "closed";
+  status:
+    | "new"
+    | "confirmed"
+    | "false_alarm"
+    | "escalated"
+    | "in_progress"
+    | "contained"
+    | "extinguished"
+    | "closed";
   hotspotCount: number;
   latitude: number | null;
   longitude: number | null;
   firstDetectedAt: string;
   lastDetectedAt: string;
   closedAt: string | null;
+}
+
+export interface PublicRisk {
+  region_id: string;
+  region_code: string;
+  region_name: string;
+  region_level: string;
+  week_start: string;
+  risk_level: "rendah" | "sedang" | "tinggi" | "ekstrem";
+  score: number | null;
+  top_reasons: string[];
+  method: string;
 }
 
 export interface PublicHotspotRow {
@@ -76,8 +96,10 @@ export function pointCoordinates(value: unknown): {
   const point = value as { type?: unknown; coordinates?: unknown };
   if (point.type !== "Point" || !Array.isArray(point.coordinates)) return null;
   const [longitude, latitude] = point.coordinates;
-  return typeof latitude === "number" && Number.isFinite(latitude) &&
-    typeof longitude === "number" && Number.isFinite(longitude)
+  return typeof latitude === "number" &&
+    Number.isFinite(latitude) &&
+    typeof longitude === "number" &&
+    Number.isFinite(longitude)
     ? { latitude, longitude }
     : null;
 }
@@ -176,6 +198,8 @@ export function reportToLaporan(report: PublicReport) {
           ? ("ditolak" as const)
           : ("menunggu" as const),
     imageUrl:
-      report.media.find((media) => media.mediaType === "image" && media.annotated)?.url ?? null,
+      report.media.find(
+        (media) => media.mediaType === "image" && media.annotated,
+      )?.url ?? null,
   };
 }

@@ -7,13 +7,19 @@ import {
   useEffect,
   useState,
 } from "react";
-import { type HotspotStatus, hotspots } from "@/lib/dummy-data";
 import {
   type OwnershipReviewInput,
   type OwnershipReviews,
   validateOwnershipReview,
 } from "@/lib/land-ownership";
-import { type PublicReport, reportToLaporan } from "@/lib/public-api";
+import {
+  type PublicHotspot,
+  type PublicIncident,
+  type PublicRegionBoundary,
+  type PublicReport,
+  type PublicRisk,
+  reportToLaporan,
+} from "@/lib/public-api";
 import {
   can as canFn,
   defaultRole,
@@ -21,6 +27,13 @@ import {
   type Permission,
   type Role,
 } from "@/lib/roles";
+import {
+  type Desa,
+  type Hotspot,
+  type HotspotStatus,
+  hotspotFromPublic,
+  regionsToVillages,
+} from "@/lib/ui-data";
 
 export interface Laporan {
   id: string;
@@ -47,6 +60,7 @@ interface Ctx {
   laporan: Laporan[];
   reportsLoading: boolean;
   reportsError: string | null;
+  publicReports: PublicReport[];
   refreshReports: () => Promise<void>;
   setLaporanStatus: (id: string, s: Laporan["status"]) => void;
   ownershipReviews: OwnershipReviews;
@@ -54,6 +68,22 @@ interface Ctx {
     parcelId: string,
     input: OwnershipReviewInput,
   ) => string | null;
+  hotspots: Hotspot[];
+  desaList: Desa[];
+  publicHotspots: PublicHotspot[];
+  publicIncidents: PublicIncident[];
+  regions: PublicRegionBoundary[];
+  risks: PublicRisk[];
+  liveDataLoading: boolean;
+  liveDataError: string | null;
+  hotspotsLoading: boolean;
+  incidentsLoading: boolean;
+  regionsLoading: boolean;
+  loadRegions: (
+    level?: PublicRegionBoundary["level"],
+    parentId?: string,
+  ) => Promise<void>;
+  risksLoading: boolean;
 }
 
 const AppCtx = createContext<Ctx | null>(null);
@@ -63,11 +93,21 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [statuses, setStatuses] = useState<Record<string, HotspotStatus>>({});
   const [escalated, setEscalated] = useState<string[]>([]);
   const [laporan, setLaporan] = useState<Laporan[]>([]);
+  const [publicReports, setPublicReports] = useState<PublicReport[]>([]);
   const [reportsLoading, setReportsLoading] = useState(true);
   const [reportsError, setReportsError] = useState<string | null>(null);
   const [ownershipReviews, setOwnershipReviews] = useState<OwnershipReviews>(
     {},
   );
+  const [publicHotspots, setPublicHotspots] = useState<PublicHotspot[]>([]);
+  const [publicIncidents, setPublicIncidents] = useState<PublicIncident[]>([]);
+  const [regions, setRegions] = useState<PublicRegionBoundary[]>([]);
+  const [risks, setRisks] = useState<PublicRisk[]>([]);
+  const [hotspotsLoading, setHotspotsLoading] = useState(true);
+  const [incidentsLoading, setIncidentsLoading] = useState(true);
+  const [regionsLoading, setRegionsLoading] = useState(false);
+  const [risksLoading, setRisksLoading] = useState(true);
+  const [liveDataError, setLiveDataError] = useState<string | null>(null);
 
   useEffect(() => {
     void fetch("/api/auth/session")
@@ -81,6 +121,73 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       });
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    const load = <T,>(
+      url: string,
+      setData: (data: T[]) => void,
+      setLoading: (loading: boolean) => void,
+    ) => {
+      void fetch(url)
+        .then(async (response) => {
+          if (!response.ok) throw new Error(url);
+          return (await response.json()) as { data: T[] };
+        })
+        .then(({ data }) => {
+          if (active) setData(data);
+        })
+        .catch(() => {
+          if (active)
+            setLiveDataError("Sebagian data pantauan belum dapat dimuat.");
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    };
+    load(
+      "/api/public/hotspots?limit=200",
+      setPublicHotspots,
+      setHotspotsLoading,
+    );
+    load(
+      "/api/public/incidents?limit=200",
+      setPublicIncidents,
+      setIncidentsLoading,
+    );
+    load("/api/public/risk", setRisks, setRisksLoading);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const loadRegions = async (
+    level?: PublicRegionBoundary["level"],
+    parentId?: string,
+  ) => {
+    const params = new URLSearchParams();
+    if (level) params.set("level", level);
+    if (parentId) params.set("parent_id", parentId);
+    setRegionsLoading(true);
+    try {
+      const response = await fetch(
+        `/api/public/regions${params.size ? `?${params}` : ""}`,
+      );
+      if (!response.ok) throw new Error("Unable to load regions");
+      const { data } = (await response.json()) as {
+        data: PublicRegionBoundary[];
+      };
+      setRegions((previous) => {
+        const byId = new Map(previous.map((region) => [region.id, region]));
+        for (const region of data) byId.set(region.id, region);
+        return [...byId.values()];
+      });
+    } catch {
+      setLiveDataError("Wilayah belum dapat dimuat.");
+    } finally {
+      setRegionsLoading(false);
+    }
+  };
+
   const refreshReports = async () => {
     setReportsLoading(true);
     setReportsError(null);
@@ -88,6 +195,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       const response = await fetch("/api/public/reports");
       if (!response.ok) throw new Error("Unable to load reports");
       const { data } = (await response.json()) as { data: PublicReport[] };
+      setPublicReports(data);
       setLaporan(data.map(reportToLaporan));
     } catch {
       setReportsError("Laporan belum dapat dimuat.");
@@ -104,7 +212,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         return (await response.json()) as { data: PublicReport[] };
       })
       .then(({ data }) => {
-        if (active) setLaporan(data.map(reportToLaporan));
+        if (active) {
+          setPublicReports(data);
+          setLaporan(data.map(reportToLaporan));
+        }
       })
       .catch(() => {
         if (active) {
@@ -125,13 +236,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setRole: setRoleState,
     can: (p) => canFn(role, p),
     statusOf: (id) =>
-      statuses[id] ?? hotspots.find((h) => h.id === id)?.status ?? "baru",
+      statuses[id] ??
+      publicHotspots
+        .map((hotspot) => hotspotFromPublic(hotspot, publicIncidents))
+        .find((hotspot) => hotspot.id === id)?.status ??
+      "baru",
     setStatus: (id, s) => setStatuses((prev) => ({ ...prev, [id]: s })),
     escalated,
     escalate: (id) => setEscalated((p) => (p.includes(id) ? p : [...p, id])),
     laporan,
     reportsLoading,
     reportsError,
+    publicReports,
     refreshReports,
     setLaporanStatus: (id, s) =>
       setLaporan((p) => p.map((l) => (l.id === id ? { ...l, status: s } : l))),
@@ -152,6 +268,22 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       }));
       return null;
     },
+    hotspots: publicHotspots.map((hotspot) =>
+      hotspotFromPublic(hotspot, publicIncidents),
+    ),
+    desaList: regionsToVillages(regions, risks),
+    publicHotspots,
+    publicIncidents,
+    regions,
+    risks,
+    liveDataLoading:
+      hotspotsLoading || incidentsLoading || regionsLoading || risksLoading,
+    liveDataError,
+    hotspotsLoading,
+    incidentsLoading,
+    regionsLoading,
+    risksLoading,
+    loadRegions,
   };
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
